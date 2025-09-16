@@ -48,11 +48,23 @@ def run_match_worker(match_queue):
             print(f"[{worker_name}] Match created with ID: {match_id}")
 
             # --- 3. Run the Game Engine ---
-            # This is the most time-consuming step. The worker is blocked here
-            # while the engine runs the match in Docker.
-            winner_code, replay_data = engine.run_match(bot0_path, bot1_path, match_id)
-            loser_code = team1_id if winner_code == team0_id else team0_id
-            print("jhsgfjhewf")
+            match_result = engine.run_match(bot0_path, bot1_path)
+
+            # 4. Translate the engine's result ('p0' or 'p1') back to the real Team ID
+            winner_key = match_result['winner']  # This will be 'p0', 'p1', or 'draw'
+            replay_data = match_result['replay']
+
+            winner_team_id = None
+            if winner_key == 'p0':
+                winner_team_id = team0_id
+            elif winner_key == 'p1':
+                winner_team_id = team1_id
+
+            # 5. Determine the loser's ID for the rating system
+            loser_team_id = None
+            if winner_team_id:
+                loser_team_id = team1_id if winner_team_id == team0_id else team0_id
+            
 
             # --- 4. Calculate New Ratings ---
             rating_system.update_glicko_ratings(winner_id=winner_code, loser_id=loser_code)

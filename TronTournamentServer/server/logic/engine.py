@@ -1,160 +1,136 @@
-# FINAL FIX: This version includes a sys.path modification at the top,
-# making it directly runnable and bypassing the fragile '-m' module system.
-
-import sys
-import os
+# server/logic/engine.py
 import subprocess
 import json
 import random
 import threading
-import queue
 import time
+import os
 
-# --- BOILERPLATE TO MAKE SCRIPT RUNNABLE ---
-# This block of code adds the project's root directory to the Python path.
-# This makes the absolute imports (like 'from server.config...') work
-# even when the script is executed directly.
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, project_root)
-# -------------------------------------------
+from server.config import DOCKER_IMAGE_NAME, MOVE_TIMEOUT_S, MEMORY_LIMIT_MB, GRID_WIDTH, GRID_HEIGHT, MAX_TURNS
+from server.logic.game_state import Player, GameState
 
-# Now the absolute imports will work correctly
-from server.config import (
-    DOCKER_IMAGE_NAME, MOVE_TIMEOUT_S, MEMORY_LIMIT_MB,
-    GRID_WIDTH, GRID_HEIGHT, MAX_TURNS
-)
-from server.logic.game_state import GameState, Player
-
-REPLAYS_DIR = "replays"
-os.makedirs(REPLAYS_DIR, exist_ok=True)
-
-
-def _bot_reader_thread(process, move_queue):
-    try:
-        for line in iter(process.stdout.readline, b''):
-            move_queue.put(line.decode('utf-8').strip())
-    except Exception:
-        pass
-
-
-def run_match(bot1_path, bot2_path, match_id):
-    print(f"[Match {match_id}] Starting: {os.path.basename(bot1_path)} vs {os.path.basename(bot2_path)}")
-    replay_filename = f"{match_id}_replay.json"
-    winner_id = -1
-    replay_filepath = os.path.join(REPLAYS_DIR, f"{match_id}.json")
-
-    def create_docker_command(bot_path):
-        bot_dir = os.path.dirname(bot_path)
-        abs_path = os.path.abspath(bot_dir)
-        return [
-            "docker", "run", "--rm", "-i",
-            f'--memory={MEMORY_LIMIT_MB}m', f'--memory-swap={MEMORY_LIMIT_MB}m',
-            "-v", f"{abs_path}:/usr/src/app",
-            DOCKER_IMAGE_NAME, "/bin/bash", "run.sh"
-        ]
-
-    p1_process = subprocess.Popen(create_docker_command(bot1_path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2_process = subprocess.Popen(create_docker_command(bot2_path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    bot_processes = [p1_process, p2_process]
-    p1_queue = queue.Queue()
-    p2_queue = queue.Queue()
-    bot_queues = [p1_queue, p2_queue]
-    p1_thread = threading.Thread(target=_bot_reader_thread, args=(p1_process, p1_queue))
-    p2_thread = threading.Thread(target=_bot_reader_thread, args=(p2_process, p2_queue))
-    p1_thread.daemon = True
-    p2_thread.daemon = True
-    p1_thread.start()
-    p2_thread.start()
-    # winner_id = -1
-    # replay_filepath = os.path.join(REPLAYS_DIR, f"{match_id}.json")
-
-    try:
-        padding = 5
-        p1_x = random.randint(padding, (GRID_WIDTH // 2) - padding)
-        p1_y = random.randint(padding, GRID_HEIGHT - 1 - padding)
-        p2_x = GRID_WIDTH - 1 - p1_x
-        p2_y = GRID_HEIGHT - 1 - p1_y
-        
-        player1 = Player(0, p1_x, p1_y)
-        player2 = Player(1, p2_x, p2_y)
-        state = GameState([player1, player2])
-        turn = 0
-
-        while len([p for p in state.players if p.is_alive]) > 1:
-            if turn >= MAX_TURNS:
-                print(f"[Match {match_id}] Max turn limit reached.")
-                break
-
-            current_player_index = turn % 2
-            current_player = state.players[current_player_index]
-            process = bot_processes[current_player_index]
-            move_queue = bot_queues[current_player_index]
-
-            if not current_player.is_alive:
-                turn += 1
-                continue
-
-            move = "TIMEOUT"
-            try:
-                input_str = state.to_json_for_player(current_player.id, turn)
-                process.stdin.write(input_str.encode('utf-8'))
-                process.stdin.flush()
-                raw_output = move_queue.get(timeout=MOVE_TIMEOUT_S)
-                try:
-                    move_data = json.loads(raw_output)
-                    if "move" in move_data and move_data["move"] in ["UP", "DOWN", "LEFT", "RIGHT"]:
-                        move = move_data["move"]
-                    else:
-                        raise ValueError("Invalid move key or value in JSON")
-                except (json.JSONDecodeError, ValueError) as e:
-                    print(f"[Match {match_id}] Player {current_player.id} sent invalid JSON: {e}", file=sys.stderr)
-                    move = "CRASH"
-            except queue.Empty:
-                print(f"[Match {match_id}] Player {current_player.id} timed out!", file=sys.stderr)
-            except Exception as e:
-                print(f"[Match {match_id}] Player {current_player.id} crashed or had pipe error: {e}", file=sys.stderr)
-                move = "CRASH"
-            
-            state.update_player_move(current_player.id, move)
-            turn += 1
-
-        alive_players = [p for p in state.players if p.is_alive]
-        if len(alive_players) == 1:
-            winner_id = alive_players[0].id
-        elif len(alive_players) > 1:
-            p0_territory = state.count_territory(0)
-            p1_territory = state.count_territory(1)
-            if p0_territory > p1_territory: winner_id = 0
-            elif p1_territory > p0_territory: winner_id = 1
-            else: winner_id = 0
-        else:
-            winner_id = -1
-        
-        log_data = state.get_log_data(winner_id)
-        replay_data_string = json.dumps(log_data)
-        with open(replay_filepath, "w") as f: json.dump(log_data, f)
-        print(f"[Match {match_id}] Replay saved to {replay_filepath}")
-    except Exception as e:
-        # 2. This block CATCHES any error and PREVENTS the crash.
-        print(f"[Match {match_id}] A fatal error occurred: {e}")
-        # The function will now continue on, using the default error values we set above.
-
-    finally:
-        for p in bot_processes:
-            try: p.kill()
-            except: pass
-
-    print(f"[Match {match_id}] Finished. Winner: Player {winner_id}")
-    return winner_id, replay_data_string
-
-# This block allows the script to be run directly for testing
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print(f"Usage: py {sys.argv[0]} <path_to_bot_1> <path_to_bot_2> <match_id>")
-        sys.exit(1)
+def get_bot_response(bot_proc, json_data, timeout_s):
+    """Gets a bot's move with a strict time limit."""
+    result = {"move": None, "raw_output": "", "error": None}
     
-    bot1 = sys.argv[1]
-    bot2 = sys.argv[2]
-    match_id = sys.argv[3]
-    run_match(bot1, bot2, match_id)
+    def target():
+        try:
+            bot_proc.stdin.write(json_data.encode('utf-8'))
+            bot_proc.stdin.flush()
+            line = bot_proc.stdout.readline().decode('utf-8').strip()
+            result["raw_output"] = line
+            if line:
+                result["move"] = json.loads(line).get("move")
+            else:
+                result["error"] = "Bot exited or sent empty response."
+        except (IOError, json.JSONDecodeError) as e:
+            result["error"] = f"Invalid JSON or I/O Error: {e}"
+        except Exception as e:
+            result["error"] = f"Unknown bot error: {e}"
 
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join(timeout=timeout_s)
+
+    if thread.is_alive():
+        result["error"] = f"Timeout: Move took longer than {timeout_s * 1000}ms."
+    
+    return result
+
+def create_docker_command(bot_path):
+    bot_dir = os.path.dirname(bot_path)
+    abs_dir_path = os.path.abspath(bot_dir)
+    return [
+        "docker", "run", "--rm", "-i",
+        f'--memory={MEMORY_LIMIT_MB}m', f'--memory-swap={MEMORY_LIMIT_MB}m',
+        "-v", f"{abs_dir_path}:/usr/src/app",
+        DOCKER_IMAGE_NAME, "/bin/bash", "run.sh"
+    ]
+
+def run_match(bot_path_1, bot_path_2):
+    """
+    Runs a single, fair Tron match between two bots inside Docker containers.
+    This version is based on the simultaneous-move referee logic.
+    """
+    p1_proc = subprocess.Popen(create_docker_command(bot_path_1), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p2_proc = subprocess.Popen(create_docker_command(bot_path_2), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    bot_procs = [p1_proc, p2_proc]
+
+    # REFACTORED: Initialize game objects from the new game_state
+    padding = 5
+    p1_x = random.randint(padding, (GRID_WIDTH // 2) - padding)
+    p1_y = random.randint(padding, GRID_HEIGHT - 1 - padding)
+    p2_x = GRID_WIDTH - 1 - p1_x
+    p2_y = p1_y # Start on the same row for symmetry
+    
+    players = [Player(0, (p1_x, p1_y), (1, 0)), Player(1, (p2_x, p2_y), (-1, 0))] # p0, p1
+    state = GameState(GRID_WIDTH, GRID_HEIGHT)
+    
+    game_log = {"frames": [], "result": {}}
+    turn = 0
+    
+    game_log["frames"].append(state.get_state_for_json(turn, players[0], players[1]))
+
+    winner_id_num = -1 # -1 for draw, 0 for p0, 1 for p1
+    termination_reason = "Max turns reached"
+
+    while all(p.is_alive for p in players) and turn < MAX_TURNS:
+        turn += 1
+        
+        # 1. Get moves from both bots simultaneously
+        p0_json = state.get_json_for_bot(turn, players[0], players[1])
+        p1_json = state.get_json_for_bot(turn, players[1], players[0])
+
+        p0_response = get_bot_response(bot_procs[0], p0_json, MOVE_TIMEOUT_S)
+        p1_response = get_bot_response(bot_procs[1], p1_json, MOVE_TIMEOUT_S)
+
+        p0_move, p1_move = p0_response["move"], p1_response["move"]
+
+        # 2. Disqualify bots for errors/timeouts/invalid moves
+        move_map = {"UP": (0, -1), "DOWN": (0, 1), "LEFT": (-1, 0), "RIGHT": (1, 0)}
+        if p0_response["error"] or p0_move not in move_map:
+            players[0].is_alive = False
+            termination_reason = f"p0 error: {p0_response['error'] or 'Invalid move'}"
+        if p1_response["error"] or p1_move not in move_map:
+            players[1].is_alive = False
+            termination_reason = f"p1 error: {p1_response['error'] or 'Invalid move'}"
+
+        if not all(p.is_alive for p in players): break
+
+        # 3. Set intended directions
+        players[0].direction = move_map[p0_move]
+        players[1].direction = move_map[p1_move]
+
+        # 4. Check for all collisions *before* moving
+        state.check_for_fatalities(players[0], players[1])
+        if not players[0].is_alive and not players[1].is_alive: termination_reason = "Head-on collision or mutual error"
+        elif not players[0].is_alive: termination_reason = "p0 collision"
+        elif not players[1].is_alive: termination_reason = "p1 collision"
+
+        # 5. Apply moves for any players still alive
+        if players[0].is_alive: players[0].apply_move()
+        if players[1].is_alive: players[1].apply_move()
+        
+        game_log["frames"].append(state.get_state_for_json(turn, players[0], players[1]))
+
+    # --- End of Loop ---
+
+    # Determine winner
+    p0_alive, p1_alive = players[0].is_alive, players[1].is_alive
+    winner_key = "draw"
+    if p0_alive and not p1_alive: winner_key, winner_id_num = "p0", 0
+    elif not p0_alive and p1_alive: winner_key, winner_id_num = "p1", 1
+    
+    # Finalize log and kill processes
+    game_log["result"] = {"winner": winner_key, "termination": termination_reason}
+    replay_data_string = json.dumps(game_log)
+    for proc in bot_procs:
+        try: proc.kill()
+        except: pass
+
+    # REFACTORED: Return the standard result dictionary
+    return {
+        "winner": winner_key,
+        "replay": replay_data_string,
+        "termination_reason": termination_reason
+    }
