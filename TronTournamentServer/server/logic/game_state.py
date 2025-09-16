@@ -1,111 +1,88 @@
-import sys
-import os
-import json
+# server/logic/game_state.py
 from collections import deque
-
-# --- BOILERPLATE TO MAKE SCRIPT RUNNABLE ---
-# This block of code adds the project's root directory to the Python path.
-# This makes the absolute imports (like 'from server.config...') work
-# even when the script is executed directly.
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, project_root)
-# -------------------------------------------
-
+import json
 from server.config import GRID_WIDTH, GRID_HEIGHT
 
 class Player:
-    """Represents a single player in the game."""
-    def __init__(self, player_id, start_x, start_y):
+    """Represents a player (a snake) in the Tron game."""
+    def __init__(self, player_id, start_pos, start_dir):
         self.id = player_id
-        self.path = [(start_x, start_y)]
+        self.body = deque([start_pos])
+        self.direction = start_dir  # e.g., (0, 1) for DOWN
         self.is_alive = True
+        self.length = 1
+        self.move_decision = None # Stores the upcoming move
+
     @property
     def head(self):
-        """Returns the current head position of the player's trail."""
-        return self.path[-1]
+        return self.body[0]
+
+    def apply_move(self):
+        """Applies the stored move decision to grow the snake."""
+        new_head = (self.head[0] + self.direction[0], self.head[1] + self.direction[1])
+        self.body.appendleft(new_head)
+        self.length += 1
 
 class GameState:
-    """Represents the entire state of the game board and handles game logic."""
-    def __init__(self, players):
-        self.players = players
-        self.grid = [[-1 for _ in range(GRID_HEIGHT)] for _ in range(GRID_WIDTH)]
-        for p in self.players:
-            if p.is_alive:
-                self.grid[p.head[0]][p.head[1]] = p.id
+    """Manages the game board and collision detection."""
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
 
-    def update_player_move(self, player_id, move):
-        """Validates a player's move and updates the game state."""
-        player = self.players[player_id]
-        if not player.is_alive: return
+    def check_for_fatalities(self, p1, p2):
+        """
+        Checks for all possible collision types before players move.
+        This is the primary collision logic for the simultaneous-move engine.
+        """
+        p1_next_head = (p1.head[0] + p1.direction[0], p1.head[1] + p1.direction[1])
+        p2_next_head = (p2.head[0] + p2.direction[0], p2.head[1] + p2.direction[1])
 
-        head_x, head_y = player.head
-        new_head = (head_x, head_y)
-        if move == "UP": new_head = (head_x, head_y - 1)
-        elif move == "DOWN": new_head = (head_x, head_y + 1)
-        elif move == "LEFT": new_head = (head_x - 1, head_y)
-        elif move == "RIGHT": new_head = (head_x + 1, head_y)
-        else:
-            player.is_alive = False
-            return
-            
-        nx, ny = new_head
-        if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT) or self.grid[nx][ny] != -1:
-            player.is_alive = False
-        else:
-            player.path.append(new_head)
-            self.grid[nx][ny] = player.id
+        p1_is_fatal = False
+        p2_is_fatal = False
 
-    def count_territory(self, player_id):
-        """Calculates the number of empty, reachable squares for a player (BFS)."""
-        player = self.players[player_id]
-        if not player.is_alive: return 0
-        q = deque([player.head])
-        visited = {player.head}
-        count = 0
-        while q:
-            x, y = q.popleft()
-            count += 1
-            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-                nx, ny = x + dx, y + dy
-                if (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT and
-                        self.grid[nx][ny] == -1 and (nx, ny) not in visited):
-                    visited.add((nx, ny))
-                    q.append((nx, ny))
-        return count - len(player.path)
+        # 1. Wall collisions
+        if not (0 <= p1_next_head[0] < self.width and 0 <= p1_next_head[1] < self.height):
+            p1_is_fatal = True
+        if not (0 <= p2_next_head[0] < self.width and 0 <= p2_next_head[1] < self.height):
+            p2_is_fatal = True
 
-    def to_json_for_player(self, player_id, turn):
-        """Serializes the game state to the rich JSON format for a bot."""
-        you = self.players[player_id]
-        opponent = self.players[1 - player_id]
-        
-        grid_str_array = []
-        for y in range(GRID_HEIGHT):
-            row_str = ""
-            for x in range(GRID_WIDTH):
-                cell = self.grid[x][y]
-                if cell == -1: row_str += "."
-                elif cell == you.id: row_str += "0"
-                else: row_str += "1"
-            grid_str_array.append(row_str)
+        # 2. Body collisions (self and opponent)
+        if not p1_is_fatal and (p1_next_head in p1.body or p1_next_head in p2.body):
+            p1_is_fatal = True
+        if not p2_is_fatal and (p2_next_head in p2.body or p2_next_head in p1.body):
+            p2_is_fatal = True
 
-        state_representation = {
-            "turn": turn,
-            "board": {"height": GRID_HEIGHT, "width": GRID_WIDTH, "grid": grid_str_array},
-            "you": {
-                "id": f"p{you.id}", "head": {"x": you.head[0], "y": you.head[1]},
-                "body": [{"x": px, "y": py} for px, py in reversed(you.path)], "length": len(you.path)
-            },
-            "opponent": {
-                "id": f"p{opponent.id}", "head": {"x": opponent.head[0], "y": opponent.head[1]},
-                "body": [{"x": px, "y": py} for px, py in reversed(opponent.path)], "length": len(opponent.path)
-            }
-        }
-        return json.dumps(state_representation) + '\n'
+        # 3. Head-on collision
+        if p1_next_head == p2_next_head:
+            p1_is_fatal = True
+            p2_is_fatal = True
 
-    def get_log_data(self, winner_id):
-        """Creates the dictionary for the JSON replay file."""
+        if p1_is_fatal: p1.is_alive = False
+        if p2_is_fatal: p2.is_alive = False
+
+
+    def get_state_for_json(self, turn, p1, p2):
+        """Creates a dictionary representing the current state for logging."""
         return {
-            "grid_size": (GRID_WIDTH, GRID_HEIGHT), "winner_id": winner_id,
-            "players": [{"id": p.id, "path": p.path} for p in self.players]
+            "turn": turn,
+            "board": {"width": self.width, "height": self.height},
+            "p0": {"id": "p0", "head": {"x": p1.head[0], "y": p1.head[1]}, "body": [{"x": pos[0], "y": pos[1]} for pos in p1.body], "alive": p1.is_alive},
+            "p1": {"id": "p1", "head": {"x": p2.head[0], "y": p2.head[1]}, "body": [{"x": pos[0], "y": pos[1]} for pos in p2.body], "alive": p2.is_alive}
         }
 
+    def get_json_for_bot(self, turn, you, opponent):
+        """Creates the specific JSON string view for one bot."""
+        grid = [[0 for _ in range(self.height)] for _ in range(self.width)]
+        for part in you.body: grid[part[0]][part[1]] = 1
+        for part in opponent.body: grid[part[0]][part[1]] = 2
+        
+        # Transpose the grid for the string representation if needed, or format as required.
+        grid_str = ["".join(map(str, [grid[x][y] for x in range(self.width)])) for y in range(self.height)]
+
+        bot_view = {
+            "turn": turn,
+            "board": {"width": self.width, "height": self.height, "grid": grid_str},
+            "you": {"id": f"p{you.id}", "head": {"x": you.head[0], "y": you.head[1]}, "body": [{"x": pos[0], "y": pos[1]} for pos in you.body], "length": you.length},
+            "opponent": {"id": f"p{opponent.id}", "head": {"x": opponent.head[0], "y": opponent.head[1]}, "body": [{"x": pos[0], "y": pos[1]} for pos in opponent.body], "length": opponent.length}
+        }
+        return json.dumps(bot_view) + "\n"
