@@ -51,23 +51,21 @@ def run_match_worker(match_queue):
             match_result = engine.run_match(bot0_path, bot1_path)
 
             # 4. Translate the engine's result ('p0' or 'p1') back to the real Team ID
-            winner_key = match_result['winner']  # This will be 'p0', 'p1', or 'draw'
+    
+            # New logic that passes the raw result to the rating system
+            winner_key = match_result['winner'] # This can be 'p0', 'p1', or 'draw'
             replay_data = match_result['replay']
 
+            # Let the rating system handle the outcome, including draws
+            # (We assume tournament matches update the 'final' ratings)
+            rating_system.update_ratings(team0_id, team1_id, winner_key, rating_type='final')
+
+            # The translation logic is now ONLY needed for saving the match result
             winner_team_id = None
             if winner_key == 'p0':
                 winner_team_id = team0_id
             elif winner_key == 'p1':
                 winner_team_id = team1_id
-
-            # 5. Determine the loser's ID for the rating system
-            loser_team_id = None
-            if winner_team_id:
-                loser_team_id = team1_id if winner_team_id == team0_id else team0_id
-            
-
-            # --- 4. Calculate New Ratings ---
-            rating_system.update_glicko_ratings(winner_id=winner_team_id, loser_id=loser_team_id)
             
             # --- 5. Update DB with Final Results ---
             # db_handler.update_team_ratings(team0_id, new_team0_data)

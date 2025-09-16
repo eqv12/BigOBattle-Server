@@ -1,46 +1,41 @@
 import glicko2
 from server.database import db_handler
 
-def update_glicko_ratings(winner_id, loser_id):
+# Replace your old rating update function with this
+def update_ratings(p0_team_id, p1_team_id, winner_key, rating_type='live'):
     """
-    Fetches winner and loser ratings, calculates the new ratings using the glicko2
-    Player object, and saves them back to the database.
+    Calculates and updates ratings for two players based on a match outcome.
+    Handles wins, losses, and draws.
     """
-    # 1. Fetch current rating info from the database
-    winner_data = db_handler.get_team_by_id(winner_id)
-    loser_data = db_handler.get_team_by_id(loser_id)
+    p0_data = db_handler.get_team_by_id(p0_team_id)
+    p1_data = db_handler.get_team_by_id(p1_team_id)
 
-    print(f"Winner id {winner_id}")
-    print(f"Loser id {loser_id}")
-
-
-    if not winner_data or not loser_data:
-        print(f"ERROR: Could not find rating data for match between {winner_id} and {loser_id}")
+    if not p0_data or not p1_data:
+        print(f"ERROR: Could not find rating data for match between {p0_team_id} and {p1_team_id}")
         return
 
-    # 2. Create Glicko2 Player objects from the database data.
-    # We will use the main 'rating' columns for the live leaderboard.
-    winner = glicko2.Player(rating=winner_data['rating'], rd=winner_data['rd'], vol=winner_data['vol'])
-    loser = glicko2.Player(rating=loser_data['rating'], rd=loser_data['rd'], vol=loser_data['vol'])
+    # Determine which set of columns to use
+    rating_col, rd_col, vol_col = ('rating', 'rd', 'vol')
+    if rating_type == 'final':
+        rating_col, rd_col, vol_col = ('final_rating', 'final_rd', 'final_vol')
     
-    # 3. Report the match outcome. The library updates the objects in place.
-    # The winner's rating is updated with the loser's stats and a score of 1 (win).
-    winner.update_player([loser.getRating()], [loser.getRd()], [1])
-    # The loser's rating is updated with the winner's stats and a score of 0 (loss).
-    loser.update_player([winner.getRating()], [winner.getRd()], [0])
+    p0 = glicko2.Player(rating=p0_data[rating_col], rd=p0_data[rd_col], vol=p0_data[vol_col])
+    p1 = glicko2.Player(rating=p1_data[rating_col], rd=p1_data[rd_col], vol=p1_data[vol_col])
 
-    # 4. Update the database with the new values from the updated objects.
-    db_handler.update_team_ratings(
-        team_id=winner_id, 
-        new_rating=winner.getRating(),
-        new_rd=winner.getRd(),
-        new_vol=winner.vol
-    )
-    db_handler.update_team_ratings(
-        team_id=loser_id, 
-        new_rating=loser.getRating(),
-        new_rd=loser.getRd(),
-        new_vol=loser.vol
-    )
-    
-    print(f"Updated Glicko-2 ratings for winner {winner_id} and loser {loser_id}")
+    # Determine scores based on the outcome
+    if winner_key == 'p0':
+        p0_score, p1_score = 1.0, 0.0 # p0 wins
+    elif winner_key == 'p1':
+        p0_score, p1_score = 0.0, 1.0 # p1 wins
+    else: # Draw
+        p0_score, p1_score = 0.5, 0.5 # Draw
+
+    # Update player objects with the outcome
+    p0.update_player([p1.getRating()], [p1.getRd()], [p1_score])
+    p1.update_player([p0.getRating()], [p0.getRd()], [p0_score])
+
+    # Save new ratings back to the database
+    db_handler.update_team_ratings(p0_team_id, p0.getRating(), p0.getRd(), p0.vol, rating_type)
+    db_handler.update_team_ratings(p1_team_id, p1.getRating(), p1.getRd(), p1.vol, rating_type)
+
+    print(f"Updated {rating_type} ratings for {p0_team_id} and {p1_team_id}.")

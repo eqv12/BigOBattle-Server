@@ -30,6 +30,7 @@ if __name__ == "__main__":
             break
         
         try:
+            # raise Exception("Something went wrong!")
             game_state = json.loads(line)
             move = decide_move(game_state)
             # The flush=True is critical to prevent the buffering issue

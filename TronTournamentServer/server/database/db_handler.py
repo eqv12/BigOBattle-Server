@@ -53,14 +53,20 @@ def update_team_status(team_id, new_status):
     conn.close()
     print(f"Updated status for Team ID {team_id} to '{new_status}'")
 
-def update_team_ratings(team_id, new_rating, new_rd, new_vol):
-    """Updates a team's Glicko-2 ratings after a ranked match."""
+def update_team_ratings(team_id, new_rating, new_rd, new_vol, rating_type='live'):
+    """
+    Updates a team's Glicko-2 ratings in the correct columns based on rating_type.
+    """
+    
+    # The 'rating_type' parameter acts as a switch to select the correct SQL query.
+    if rating_type == 'final':
+        sql = 'UPDATE teams SET final_rating = ?, final_rd = ?, final_vol = ? WHERE id = ?'
+    else: # Default to updating the live leaderboard ratings
+        sql = 'UPDATE teams SET rating = ?, rd = ?, vol = ? WHERE id = ?'
+
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        'UPDATE teams SET final_rating = ?, final_rd = ?, final_vol = ? WHERE id = ?',
-        (new_rating, new_rd, new_vol, team_id)
-    )
+    cur.execute(sql, (new_rating, new_rd, new_vol, team_id))
     conn.commit()
     conn.close()
 
