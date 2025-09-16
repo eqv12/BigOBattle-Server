@@ -67,12 +67,12 @@ def run_match_worker(match_queue):
             
 
             # --- 4. Calculate New Ratings ---
-            rating_system.update_glicko_ratings(winner_id=winner_code, loser_id=loser_code)
+            rating_system.update_glicko_ratings(winner_id=winner_team_id, loser_id=loser_team_id)
             
             # --- 5. Update DB with Final Results ---
             # db_handler.update_team_ratings(team0_id, new_team0_data)
             # db_handler.update_team_ratings(team1_id, new_team1_data)
-            db_handler.update_match_result(match_id, winner_code, replay_data=replay_data)
+            db_handler.update_match_result(match_id, winner_team_id, replay_data=replay_data)
             
             print(f"[{worker_name}] ✅ Finished processing Match {match_id}. Waiting for next match.")
 

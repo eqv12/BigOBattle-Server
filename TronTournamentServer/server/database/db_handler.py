@@ -151,3 +151,24 @@ def get_results_for_round(round_number):
     ).fetchall()
     conn.close()
     return results
+
+def get_replay_data(match_id):
+    """
+    Fetches the replay data JSON string for a single match from the database.
+    """
+    conn = get_db_connection()
+    # Using row_factory allows us to access columns by name
+    conn.row_factory = sqlite3.Row 
+    
+    result_row = conn.execute(
+        "SELECT replay_data FROM matches WHERE id = ?",
+        (match_id,)
+    ).fetchone()
+    
+    conn.close()
+
+    if result_row:
+        return result_row['replay_data']
+    else:
+        # Return None if no match with that ID was found
+        return None
