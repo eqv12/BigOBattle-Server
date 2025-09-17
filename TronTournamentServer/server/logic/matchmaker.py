@@ -70,9 +70,13 @@ def run_match_worker(match_queue):
             # --- 5. Update DB with Final Results ---
             # db_handler.update_team_ratings(team0_id, new_team0_data)
             # db_handler.update_team_ratings(team1_id, new_team1_data)
+            termination_reason = match_result['termination_reason'] # Get the reason
+
             db_handler.update_match_result(match_id, winner_team_id, replay_data=replay_data)
             
-            print(f"[{worker_name}] ✅ Finished processing Match {match_id}. Waiting for next match.")
+            # print(f"[{worker_name}] ✅ Finished processing Match {match_id}. Waiting for next match.")
+            print(f"[{worker_name}] ✅ Finished Match {match_id}: {termination_reason}. Waiting for next match.")
+
 
         except Exception as e:
             # This broad exception ensures a single failed match doesn't kill a worker.

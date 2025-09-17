@@ -6,7 +6,7 @@ import threading
 import time
 import os
 
-from server.config import DOCKER_IMAGE_NAME, MOVE_TIMEOUT_S, MEMORY_LIMIT_MB, GRID_WIDTH, GRID_HEIGHT, MAX_TURNS
+from server.config import DOCKER_IMAGE_NAME, MOVE_TIMEOUT_S, MEMORY_LIMIT_MB, GRID_WIDTH, GRID_HEIGHT, MAX_TURNS, FIRST_MOVE_TIMEOUT_S
 from server.logic.game_state import Player, GameState
 
 def get_bot_response(bot_proc, json_data, timeout_s):
@@ -52,8 +52,12 @@ def run_match(bot_path_1, bot_path_2):
     Runs a single, fair Tron match between two bots inside Docker containers.
     This version is based on the simultaneous-move referee logic.
     """
-    p1_proc = subprocess.Popen(create_docker_command(bot_path_1), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2_proc = subprocess.Popen(create_docker_command(bot_path_2), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # p1_proc = subprocess.Popen(create_docker_command(bot_path_1), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # p2_proc = subprocess.Popen(create_docker_command(bot_path_2), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    p1_proc = subprocess.Popen(create_docker_command(bot_path_1), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p2_proc = subprocess.Popen(create_docker_command(bot_path_2), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
     bot_procs = [p1_proc, p2_proc]
 
     # REFACTORED: Initialize game objects from the new game_state
@@ -81,8 +85,10 @@ def run_match(bot_path_1, bot_path_2):
         p0_json = state.get_json_for_bot(turn, players[0], players[1])
         p1_json = state.get_json_for_bot(turn, players[1], players[0])
 
-        p0_response = get_bot_response(bot_procs[0], p0_json, MOVE_TIMEOUT_S)
-        p1_response = get_bot_response(bot_procs[1], p1_json, MOVE_TIMEOUT_S)
+        current_timeout = FIRST_MOVE_TIMEOUT_S if turn == 1 else MOVE_TIMEOUT_S
+
+        p0_response = get_bot_response(bot_procs[0], p0_json, current_timeout) #changed this from MOVE_TIMEOUT_S to current time out to include jvm startup time
+        p1_response = get_bot_response(bot_procs[1], p1_json, current_timeout)
 
         p0_move, p1_move = p0_response["move"], p1_response["move"]
 

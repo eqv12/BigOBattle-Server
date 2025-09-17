@@ -4,7 +4,10 @@
 # --- Docker Configuration ---
 # The full name of the pre-built image on Docker Hub.
 # To update the image later, you only need to change this one line.
-DOCKER_IMAGE_NAME = "ramyar1206/tron-battle-env:latest"
+
+# DOCKER_IMAGE_NAME = "ramyar1206/tron-battle-env:latest"
+DOCKER_IMAGE_NAME = "tron-local-env"
+
 
 # --- Game Configuration ---
 GRID_WIDTH = 25
@@ -20,3 +23,6 @@ MOVE_TIMEOUT_S = 0.5
 MEMORY_LIMIT_MB = 256
 DATABASE_FILE = "server/database/tournament.db"
 BOTS_DIR ="bots_official"
+
+#in case stuff needs time to startup
+FIRST_MOVE_TIMEOUT_S = 3.0
