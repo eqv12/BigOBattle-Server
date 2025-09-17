@@ -1,3 +1,4 @@
+print("--- RUNNING LATEST VISUALIZER.PY ---")
 import pygame
 import json
 import sys
@@ -136,7 +137,6 @@ def visualize_from_db(match_id):
     """Loads a replay from the tournament database."""
     print(f"💾 Loading replay for Match ID {match_id} from database...")
     replay_json_string = db_handler.get_replay_data(match_id)
-    
     if not replay_json_string:
         print(f"❌ Error: No replay found for Match ID {match_id} in the database.")
         return
@@ -154,6 +154,7 @@ if __name__ == "__main__":
     group.add_argument("--db", type=int, help="The ID of the match to load from the database.")
     
     args = parser.parse_args()
+    print(f"DEBUG: Parsed arguments: {args}") # Add this line
 
     if args.file:
         visualize_from_file(args.file)

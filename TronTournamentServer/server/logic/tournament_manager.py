@@ -4,7 +4,7 @@ from server.database import db_handler
 
 # For your test with 2 bots, we only need 1 round.
 # For a full 25-bot tournament, set this to 6 or 7.
-NUM_ROUNDS = 1
+NUM_ROUNDS = 3
 
 def pair_teams(round_number, team_ids, scores, played_opponents):
     """Generates pairings for a Swiss tournament round."""

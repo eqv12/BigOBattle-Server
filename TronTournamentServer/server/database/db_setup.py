@@ -3,12 +3,27 @@ import hashlib
 import secrets
 import os
 import json
+import random
 
 # --- Configuration ---
 from server.config import DATABASE_FILE
 TEAMS_TO_GENERATE = 25 # Increased for a full tournament
 PASSWORD_LIST_FILE_TXT = "organizer_passwords.txt"
 PASSWORD_LIST_FILE_JSON = "organizer_passwords.json"
+
+PASSWORDSS = [
+    "marshmallow", "flippers", "waffles", "scooter", "popsicle",
+    "jellybean", "cupcake", "snorkel", "hedgehog", "toaster",
+    "lollipop", "otter", "sundae", "gummybear", "puzzle",
+    "pancakes", "sprinkles", "koala", "kazoo", "pickles",
+    "bubbles", "slippers", "squidgy", "cheesecake", "yoyo",
+    "noodles", "unicorn", "cabbage", "platypus", "banjo",
+    "cloudberry", "iguana", "muffin", "raccoon", "trombone",
+    "jellyfish", "pebbles", "nachos", "biscuit", "velcro",
+    "wafflestomp", "doodle", "pogo", "scoops", "zebra",
+    "mango", "churro", "walrus", "bubblegum", "taco"
+]
+
 
 def hash_password(password):
     """Hashes a password using SHA-256 for secure storage."""
@@ -77,9 +92,13 @@ def setup_database():
     default_rd = 350.0
     default_vol = 0.06
 
+
+    random.shuffle(PASSWORDSS)
+
     for i in range(1, TEAMS_TO_GENERATE + 1):
         team_name = f"Team-{i}"
-        password = secrets.token_hex(8)
+        # password = secrets.token_hex(8)
+        password = PASSWORDSS[i - 1]
         password_hash = hash_password(password)
         
         passwords_for_txt.append(f"Name: {team_name}, Password: {password}")
