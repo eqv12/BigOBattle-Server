@@ -5,9 +5,27 @@ import random
 import threading
 import time
 import os
+import random
 
 from server.config import DOCKER_IMAGE_NAME, MOVE_TIMEOUT_S, MEMORY_LIMIT_MB, GRID_WIDTH, GRID_HEIGHT, MAX_TURNS, FIRST_MOVE_TIMEOUT_S
 from server.logic.game_state import Player, GameState
+
+#function for calculating symmertric positions
+def get_symmetric_start_positions(width, height, padding):
+    """Calculates a random, symmetrical starting position for two players."""
+    # Player 1's position is chosen randomly in the left half of the grid,
+    # respecting the padding.
+    p1_x = random.randint(padding, (width // 2) - padding)
+    p1_y = random.randint(padding, height - 1 - padding)
+
+    # Player 2's position is a mirror image on the right half.
+    p2_x = width - 1 - p1_x
+    p2_y = p1_y  # Start on the same row for symmetry
+
+    p1_pos = (p1_x, p1_y)
+    p2_pos = (p2_x, p2_y)
+    
+    return p1_pos, p2_pos
 
 def get_bot_response(bot_proc, json_data, timeout_s):
     """Gets a bot's move with a strict time limit."""
@@ -61,13 +79,22 @@ def run_match(bot_path_1, bot_path_2):
     bot_procs = [p1_proc, p2_proc]
 
     # REFACTORED: Initialize game objects from the new game_state
+    # padding = 5
+    # p1_x = random.randint(padding, (GRID_WIDTH // 2) - padding)
+    # p1_y = random.randint(padding, GRID_HEIGHT - 1 - padding)
+    # p2_x = GRID_WIDTH - 1 - p1_x
+    # p2_y = p1_y # Start on the same row for symmetry
+    # players = [Player(0, (p1_x, p1_y), (1, 0)), Player(1, (p2_x, p2_y), (-1, 0))] # p0, p1
+
+    # Initialize game objects with random, symmetric starting positions.
     padding = 5
-    p1_x = random.randint(padding, (GRID_WIDTH // 2) - padding)
-    p1_y = random.randint(padding, GRID_HEIGHT - 1 - padding)
-    p2_x = GRID_WIDTH - 1 - p1_x
-    p2_y = p1_y # Start on the same row for symmetry
+    p1_start_pos, p2_start_pos = get_symmetric_start_positions(GRID_WIDTH, GRID_HEIGHT, padding)
     
-    players = [Player(0, (p1_x, p1_y), (1, 0)), Player(1, (p2_x, p2_y), (-1, 0))] # p0, p1
+    # p0 starts on the left moving right, p1 starts on the right moving left.
+    players = [Player(0, p1_start_pos, (1, 0)), Player(1, p2_start_pos, (-1, 0))]
+    #new logic to start at symmetric random places
+
+
     state = GameState(GRID_WIDTH, GRID_HEIGHT)
     
     game_log = {"frames": [], "result": {}}
