@@ -1,4 +1,4 @@
-import glicko2
+import glicko2  # type: ignore
 from server.database import db_handler
 
 # Replace your old rating update function with this

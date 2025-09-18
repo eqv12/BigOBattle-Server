@@ -33,3 +33,5 @@ CALIBRATION_MATCHES = 3
 
 # The range (+/-) within which the matchmaker will pair opponents.
 MATCHMAKING_RATING_WINDOW = 200
+
+DEFAULT_RD = 350.0
