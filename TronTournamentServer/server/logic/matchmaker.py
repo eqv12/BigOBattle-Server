@@ -73,6 +73,7 @@ def run_match_worker(match_queue):
             termination_reason = match_result['termination_reason'] # Get the reason
 
             db_handler.update_match_result(match_id, winner_team_id, replay_data=replay_data)
+            db_handler.update_team_match_stats(team0_id,team1_id) #this is the new functin that will update the number of matches played by a team for callibration round
             
             # print(f"[{worker_name}] ✅ Finished processing Match {match_id}. Waiting for next match.")
             print(f"[{worker_name}] ✅ Finished Match {match_id}: {termination_reason}. Waiting for next match.")

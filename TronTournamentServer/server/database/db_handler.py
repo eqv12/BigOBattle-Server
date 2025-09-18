@@ -42,7 +42,9 @@ def get_team_by_id(team_id):
     conn = get_db_connection()
     team = conn.execute('SELECT * FROM teams WHERE id = ?', (team_id,)).fetchone()
     conn.close()
-    return team
+    # return team
+    # Also convert this to a dictionary if a team was found
+    return dict(team) if team else None
 
 def update_team_status(team_id, new_status):
     """Updates a team's status after their calibration match ('verified' or 'error')."""
@@ -201,7 +203,10 @@ def get_teams_for_matchmaking():
         """
     ).fetchall()
     conn.close()
-    return teams
+    # return teams
+    # Also convert this to a dictionary if a team was found
+    # Convert each sqlite3.Row object into a standard Python dictionary
+    return [dict(row) for row in teams]
 
 def have_teams_played_before(team_a_id, team_b_id):
     """Checks if two teams have a match record against each other."""
