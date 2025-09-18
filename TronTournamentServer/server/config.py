@@ -26,3 +26,10 @@ BOTS_DIR ="bots_official"
 
 #in case stuff needs time to startup
 FIRST_MOVE_TIMEOUT_S = 3.0
+
+# The number of matches a new bot submission should play to get an
+# initial, more accurate rating.
+CALIBRATION_MATCHES = 3
+
+# The range (+/-) within which the matchmaker will pair opponents.
+MATCHMAKING_RATING_WINDOW = 200

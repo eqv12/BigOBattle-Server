@@ -105,9 +105,11 @@ def update_bot_path(team_id, bot_path):
     """
     conn = get_db_connection()
     cur = conn.cursor()
+    now = datetime.datetime.now()
+
     cur.execute(
-        'UPDATE teams SET active_bot_path = ? WHERE id = ?',
-        (bot_path, team_id)
+        'UPDATE teams SET active_bot_path = ?, last_submission = ? WHERE id = ?',
+        (bot_path,now,team_id)
     )
     conn.commit()
     conn.close()
@@ -157,6 +159,63 @@ def get_results_for_round(round_number):
     ).fetchall()
     conn.close()
     return results
+
+
+def update_team_match_stats(team_a_id, team_b_id):
+    """
+    Updates the match stats for two teams after a game.
+    Increments their match count and sets the current time as their last played time.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    now = datetime.datetime.now()
+    
+    # Update both teams in a single transaction
+    cur.execute(
+        "UPDATE teams SET matches_played = matches_played + 1, last_played_at = ? WHERE id = ?",
+        (now, team_a_id)
+    )
+    cur.execute(
+        "UPDATE teams SET matches_played = matches_played + 1, last_played_at = ? WHERE id = ?",
+        (now, team_b_id)
+    )
+    
+    conn.commit()
+    conn.close()
+
+
+def get_teams_for_matchmaking():
+    """
+    Fetches all playable teams, ordered by who is most "due" for a match.
+    Teams that have never played are prioritized first, followed by those
+    who haven't played in the longest time.
+    """
+    conn = get_db_connection()
+    # The ORDER BY clause is key: NULLs (never played) come first,
+    # then we sort by the oldest timestamp.
+    teams = conn.execute(
+        """
+        SELECT id, name, rating, rd, matches_played FROM teams
+        WHERE active_bot_path IS NOT NULL AND active_bot_path != ''
+        ORDER BY rd DESC
+        """
+    ).fetchall()
+    conn.close()
+    return teams
+
+def have_teams_played_before(team_a_id, team_b_id):
+    """Checks if two teams have a match record against each other."""
+    conn = get_db_connection()
+    # Check for both (A vs B) and (B vs A)
+    count = conn.execute(
+        """
+        SELECT COUNT(*) FROM matches
+        WHERE (team_a_id = ? AND team_b_id = ?) OR (team_a_id = ? AND team_b_id = ?)
+        """,
+        (team_a_id, team_b_id, team_b_id, team_a_id)
+    ).fetchone()[0]
+    conn.close()
+    return count > 0
 
 def get_replay_data(match_id):
     """
