@@ -197,7 +197,13 @@ def get_teams_for_matchmaking():
     # then we sort by the oldest timestamp.
     teams = conn.execute(
         """
-        SELECT id, name, rating, rd, matches_played FROM teams
+        SELECT
+            id,
+            name,
+            final_rating AS rating,
+            final_rd AS rd,
+            matches_played
+        FROM teams
         WHERE active_bot_path IS NOT NULL AND active_bot_path != ''
         ORDER BY rd DESC
         """

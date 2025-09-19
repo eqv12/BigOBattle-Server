@@ -2,8 +2,9 @@
 
 import os
 import shutil
+from server import config
 import zipfile
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify # type: ignore
 
 # --- Project-specific imports ---
 # These imports assume you run this from the project root with `python -m server.webapp.app`
@@ -39,15 +40,22 @@ def handle_bot_submission():
     """Handles the zipped bot file submission with direct authentication."""
     
     # 1. Get credentials and file from the form submission.
-    if 'team_name' not in request.form or 'password' not in request.form:
-        return jsonify({"error": "Missing team_name or password in form data"}), 400
-        
+    if 'team_name' not in request.form:
+        return jsonify({"error": "Missing team_name in form data"}), 400
+    
     team_name = request.form['team_name']
-    password = request.form['password']
 
+    if not config.ALLOW_PASSWORDLESS_SUBMISSIONS:
+        if 'password' not in request.form:
+            return jsonify({"error": "Missing password in form data"}), 400
+        password = request.form['password']
+        if not db_handler.verify_team_credentials(team_name, password):
+            return jsonify({"error": "Authentication failed: Invalid credentials"}), 401
+    
+                
     # 2. Authenticate the user against the database.
-    if not db_handler.verify_team_credentials(team_name, password):
-        return jsonify({"error": "Authentication failed: Invalid credentials"}), 401
+    # if not db_handler.verify_team_credentials(team_name, password):
+    #     return jsonify({"error": "Authentication failed: Invalid credentials"}), 401
 
     # 3. Check if a file was included in the request.
     if 'bot_zip_file' not in request.files:
