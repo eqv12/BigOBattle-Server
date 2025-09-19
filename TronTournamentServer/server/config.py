@@ -37,3 +37,12 @@ MATCHMAKING_RATING_WINDOW = 200
 DEFAULT_RD = 350.0
 
 ALLOW_PASSWORDLESS_SUBMISSIONS = True
+
+# For the live matchmaker, run this many calibration ticks for every 1 general tick.
+MATCHMAKING_RATIO = 3
+
+
+#do a full reset for new submission or only rd and matches
+reset_full=True
+
+SUBMISSION_RATE_LIMIT_MINUTES = 2

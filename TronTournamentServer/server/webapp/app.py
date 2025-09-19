@@ -1,5 +1,6 @@
 # server/webapp/app.py
 
+import datetime
 import os
 import shutil
 from server import config
@@ -44,6 +45,24 @@ def handle_bot_submission():
         return jsonify({"error": "Missing team_name in form data"}), 400
     
     team_name = request.form['team_name']
+
+
+    # --- ADD THIS NEW BLOCK FOR RATE LIMITING ---
+    team = db_handler.get_team_by_name(team_name)
+    if team and team['last_submission']:
+        # Convert the string from the DB back into a datetime object
+        last_sub_time = datetime.datetime.strptime(team['last_submission'], '%Y-%m-%d %H:%M:%S.%f')
+        time_since_last_sub = datetime.datetime.now() - last_sub_time
+        
+        limit_seconds = config.SUBMISSION_RATE_LIMIT_MINUTES * 60
+        if time_since_last_sub.total_seconds() < limit_seconds:
+            wait_time = limit_seconds - time_since_last_sub.total_seconds()
+            return jsonify({"error": f"Rate limit exceeded. Please wait {int(wait_time)} more seconds."}), 429 # "Too Many Requests"
+
+    # --- END OF NEW BLOCK ---
+
+    # ... (the rest of the function continues as normal) ...
+
 
     if not config.ALLOW_PASSWORDLESS_SUBMISSIONS:
         if 'password' not in request.form:
@@ -111,6 +130,10 @@ def handle_bot_submission():
         # run_script_path = os.path.join(destination_path, 'run.sh')
         run_script_path = os.path.join(destination_path, 'run.sh').replace('\\', '/')
         db_handler.update_bot_path(team['id'], run_script_path)
+
+        #resets the stats for new submission
+        db_handler.reset_team_stats_for_recalibration(team['id'])
+
     
     return jsonify({"message": f"Bot for {team_name} uploaded successfully!"}), 200
 

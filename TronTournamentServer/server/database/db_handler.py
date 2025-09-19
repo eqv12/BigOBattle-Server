@@ -3,6 +3,7 @@ import datetime
 from server.config import DATABASE_FILE
 import hashlib
 import time
+from server import config
 
 # This helper function should be here so we can use it for verification.
 def hash_password(password):
@@ -214,19 +215,72 @@ def get_teams_for_matchmaking():
     # Convert each sqlite3.Row object into a standard Python dictionary
     return [dict(row) for row in teams]
 
+# def have_teams_played_before(team_a_id, team_b_id):
+#     """Checks if two teams have a match record against each other."""
+#     conn = get_db_connection()
+#     # Check for both (A vs B) and (B vs A)
+#     count = conn.execute(
+#         """
+#         SELECT COUNT(*) FROM matches
+#         WHERE (team_a_id = ? AND team_b_id = ?) OR (team_a_id = ? AND team_b_id = ?)
+#         """,
+#         (team_a_id, team_b_id, team_b_id, team_a_id)
+#     ).fetchone()[0]
+#     conn.close()
+#     return count > 0
+
 def have_teams_played_before(team_a_id, team_b_id):
-    """Checks if two teams have a match record against each other."""
+    """
+    Checks if two teams have a match record against each other since their
+    last respective bot submissions.
+    """
     conn = get_db_connection()
-    # Check for both (A vs B) and (B vs A)
+    
+    # First, get the last submission timestamps for both teams.
+    team_a = conn.execute('SELECT last_submission FROM teams WHERE id = ?', (team_a_id,)).fetchone()
+    team_b = conn.execute('SELECT last_submission FROM teams WHERE id = ?', (team_b_id,)).fetchone()
+
+    # If for some reason a timestamp is missing, default to a very old time.
+    team_a_last_sub = team_a['last_submission'] if (team_a and team_a['last_submission']) else '1970-01-01 00:00:00'
+    team_b_last_sub = team_b['last_submission'] if (team_b and team_b['last_submission']) else '1970-01-01 00:00:00'
+
+    # Now, check for matches that happened AFTER both teams' last submissions.
     count = conn.execute(
         """
         SELECT COUNT(*) FROM matches
-        WHERE (team_a_id = ? AND team_b_id = ?) OR (team_a_id = ? AND team_b_id = ?)
+        WHERE ((team_a_id = ? AND team_b_id = ?) OR (team_a_id = ? AND team_b_id = ?))
+        AND played_at > ? AND played_at > ?
         """,
-        (team_a_id, team_b_id, team_b_id, team_a_id)
+        (team_a_id, team_b_id, team_b_id, team_a_id, team_a_last_sub, team_b_last_sub)
     ).fetchone()[0]
+    
     conn.close()
     return count > 0
+
+def reset_team_stats_for_recalibration(team_id):
+    """
+    Resets a team's stats to trigger recalibration for a new bot.
+    Sets matches_played to 0 and RD to the default max value.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # We use the default RD from the config file
+    default_rd = config.DEFAULT_RD 
+    
+    if (not config.reset_full):
+        cur.execute(
+            "UPDATE teams SET matches_played = 0, final_rd = ? WHERE id = ?",
+            (default_rd, team_id)
+        )
+    else:
+        cur.execute(
+            "UPDATE teams SET matches_played = 0,final_rating=1500.0, final_rd = ? WHERE id = ?",
+            (default_rd, team_id)
+        )
+    
+    conn.commit()
+    conn.close()
+    print(f"🔄 Reset stats for Team ID {team_id} for recalibration.")
 
 def get_replay_data(match_id):
     """

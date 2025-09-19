@@ -118,67 +118,63 @@ def find_opponent_for(player, all_players, use_info=True):
 
 
 def main():
-    print("--- MAIN FUNCTION STARTED ---") # PRINT 2
     print("🚀 Starting Live Matchmaking System...")
     match_queue = matchmaker.start_matchmaker()
-    print("Matchmaker process started successfully.") # PRINT 3
+    tick_counter = 0
 
-
-    # This is the main "forever" loop of the matchmaker
     while True:
-        print("\n--- Matchmaker Tick ---")
-
-        # Get the pool once
+        print(f"\n--- Matchmaker Tick {tick_counter} ---")
+        tick_counter += 1
+        
         all_eligible_players = db_handler.get_teams_for_matchmaking()
         if not all_eligible_players:
             print("No players available. Waiting...")
             time.sleep(10)
             continue
 
-        # Ensure the list is sorted by RD DESC for the fallback priority (if you rely on that)
-        # all_eligible_players.sort(key=lambda p: p.get('rd', 0.0), reverse=True)
-        all_eligible_players.sort(key=lambda p: p['rd'], reverse=True)
-
-        player_to_match = None
-
-        # Priority 1: Find a player who needs calibration.
-        for player in all_eligible_players:
-            # if player.get('matches_played', 0) < config.CALIBRATION_MATCHES:
-            if player['matches_played'] < config.CALIBRATION_MATCHES:
-                player_to_match = player
-                print(f"Prioritizing calibration for: {player_to_match['name']} ({player_to_match['matches_played']}/{config.CALIBRATION_MATCHES})")
-                break  # Stop after finding the first one
-
-        # Priority 2: If no one needs calibration, find a general match.
-        if not player_to_match and all_eligible_players:
-            player_to_match = all_eligible_players[0]
-            print(f"No bots in calibration. Finding general match for: {player_to_match['name']} (RD: {player_to_match['rd']:.2f})")
+        match_found = False
         
-        if not player_to_match:
-            # This happens if the player list was empty to begin with.
-            time.sleep(30)
-            continue
+        # Decide whether this is a calibration tick or a general tick
+        is_calibration_tick = (tick_counter % (config.MATCHMAKING_RATIO + 1)) != 0
 
-        # Reserve the team in DB to avoid double-scheduling (recommended; implement if you can)
-        # db_handler.reserve_team_for_matchmaking(player_to_match['id'])
+        if is_calibration_tick:
+            # --- PRIORITY 1: CALIBRATION ROUND-ROBIN ---
+            calibration_candidates = [p for p in all_eligible_players if p['matches_played'] < config.CALIBRATION_MATCHES]
+            if calibration_candidates:
+                print(f"Mode: Calibration. Candidates: {len(calibration_candidates)}")
+                for candidate in calibration_candidates:
+                    opponent = find_opponent_for(candidate, all_eligible_players)
+                    if opponent:
+                        player_to_match = candidate
+                        print(f"✅ Found calibration match: {player_to_match['name']} vs {opponent['name']}")
+                        # Queue the match and break from the loop
+                        match_queue.put({'team_a_id': player_to_match['id'], 'team_b_id': opponent['id'], 'is_ranked': True, 'round': -1})
+                        match_found = True
+                        break 
+            else:
+                print("Mode: Calibration. No candidates found.")
 
-        # --- Step 2: Find a suitable opponent for that player ---
-        opponent = find_opponent_for(player_to_match, all_eligible_players)
+        # If it's not a calibration tick OR if no calibration match was found, try general matchmaking.
+        if not match_found:
+            # --- PRIORITY 2: GENERAL MATCHMAKING ROUND-ROBIN ---
+            calibrated_players = [p for p in all_eligible_players if p['matches_played'] >= config.CALIBRATION_MATCHES]
+            if calibrated_players:
+                print(f"Mode: General. Candidates: {len(calibrated_players)}")
+                # Loop through players sorted by RD and find the first possible match
+                for player in calibrated_players:
+                    opponent = find_opponent_for(player, all_eligible_players)
+                    if opponent:
+                        player_to_match = player
+                        print(f"✅ Found general match: {player_to_match['name']} vs {opponent['name']}")
+                        # Queue the match and break from the loop
+                        match_queue.put({'team_a_id': player_to_match['id'], 'team_b_id': opponent['id'], 'is_ranked': True, 'round': -1})
+                        match_found = True
+                        break
+            else:
+                print("Mode: General. No candidates found.")
 
-        # --- Step 3: If a pair is found, queue the match ---
-        if opponent:
-            print(f"✅ Found a match: {player_to_match['name']} vs {opponent['name']}")
-            match_request = {
-                'team_a_id': player_to_match['id'],
-                'team_b_id': opponent['id'],
-                'is_ranked': True,
-                'round': -1
-            }
-            match_queue.put(match_request)
-            # Optionally mark them as queued in DB:
-            # db_handler.mark_teams_queued(player_to_match['id'], opponent['id'])
-        else:
-            print(f"Could not find a suitable opponent for {player_to_match['name']}.")
+        if not match_found:
+            print("Could not find any suitable matches this tick.")
 
         time.sleep(5)
 
