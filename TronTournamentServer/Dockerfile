@@ -4,12 +4,19 @@ FROM ubuntu:22.04
 # Set an environment variable to prevent installers from asking for user input.
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Step 2: Update the package list and install all compilers and runtimes.
+# Step 2: Update the package list and install all compilers, runtimes, and libraries.
 RUN apt-get update && apt-get install -y \
+    # Compilers
     build-essential \
+    # Python
     python3 \
     pip \
+    # Java
     openjdk-17-jdk \
+    # C/C++ JSON Libraries (The New Additions)
+    libjansson-dev \
+    libjsoncpp-dev \
+    # Other tools
     curl \
     && rm -rf /var/lib/apt/lists/*
 

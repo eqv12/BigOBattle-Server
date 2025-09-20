@@ -15,12 +15,12 @@ PASSWORDSS = [
     "marshmallow", "flippers", "waffles", "scooter", "popsicle",
     "jellybean", "cupcake", "snorkel", "hedgehog", "toaster",
     "lollipop", "otter", "sundae", "gummybear", "puzzle",
-    "pancakes", "sprinkles", "koala", "kazoo", "pickles",
-    "bubbles", "slippers", "squidgy", "cheesecake", "yoyo",
+    "pancakes", "sprinkles", "pickles",
+    "bubbles", "slippers", "cheesecake",
     "noodles", "unicorn", "cabbage", "platypus", "banjo",
-    "cloudberry", "iguana", "muffin", "raccoon", "trombone",
+    "cloudberry", "muffin", "raccoon", "trombone",
     "jellyfish", "pebbles", "nachos", "biscuit", "velcro",
-    "wafflestomp", "doodle", "pogo", "scoops", "zebra",
+    "wafflestomp", "doodle", "scoops", "zebra",
     "mango", "churro", "walrus", "bubblegum", "taco"
 ]
 
@@ -97,7 +97,7 @@ def setup_database():
     default_vol = 0.06
 
 
-    random.shuffle(PASSWORDSS)
+    # random.shuffle(PASSWORDSS)
 
     for i in range(1, TEAMS_TO_GENERATE + 1):
         team_name = f"Team-{i}"

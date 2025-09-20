@@ -6,6 +6,7 @@
 # To update the image later, you only need to change this one line.
 
 # DOCKER_IMAGE_NAME = "ramyar1206/tron-battle-env:latest"
+#command to run docker is docker build -t tron-final-env .   ----with the . please
 DOCKER_IMAGE_NAME = "tron-local-env"
 
 

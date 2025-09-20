@@ -31,8 +31,12 @@ def update_ratings(p0_team_id, p1_team_id, winner_key, rating_type='live'):
         p0_score, p1_score = 0.5, 0.5 # Draw
 
     # Update player objects with the outcome
-    p0.update_player([p1.getRating()], [p1.getRd()], [p1_score])
-    p1.update_player([p0.getRating()], [p0.getRd()], [p0_score])
+    # p0.update_player([p1.getRating()], [p1.getRd()], [p1_score])
+    # p1.update_player([p0.getRating()], [p0.getRd()], [p0_score])
+
+    # Update player objects with the outcome
+    p0.update_player([p1.getRating()], [p1.getRd()], [p0_score])
+    p1.update_player([p0.getRating()], [p0.getRd()], [p1_score])
 
     # Save new ratings back to the database
     db_handler.update_team_ratings(p0_team_id, p0.getRating(), p0.getRd(), p0.vol, rating_type)
