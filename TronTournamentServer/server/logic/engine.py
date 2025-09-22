@@ -121,14 +121,27 @@ def run_match(bot_path_1, bot_path_2):
 
         # 2. Disqualify bots for errors/timeouts/invalid moves
         move_map = {"UP": (0, -1), "DOWN": (0, 1), "LEFT": (-1, 0), "RIGHT": (1, 0)}
-        if p0_response["error"] or p0_move not in move_map:
-            players[0].is_alive = False
-            termination_reason = f"p0 error: {p0_response['error'] or 'Invalid move'}"
-        if p1_response["error"] or p1_move not in move_map:
-            players[1].is_alive = False
-            termination_reason = f"p1 error: {p1_response['error'] or 'Invalid move'}"
+        # 2. Disqualify bots for errors/timeouts/invalid moves
+        p0_error = p0_response.get("error")
+        p1_error = p1_response.get("error")
+        p0_invalid_move = p0_move not in {"UP", "DOWN", "LEFT", "RIGHT"}
+        p1_invalid_move = p1_move not in {"UP", "DOWN", "LEFT", "RIGHT"}
 
-        if not all(p.is_alive for p in players): break
+        p0_is_disqualified = p0_error or p0_invalid_move
+        p1_is_disqualified = p1_error or p1_invalid_move
+
+        if p0_is_disqualified:
+            players[0].is_alive = False
+            termination_reason = f"p0 error: {p0_error or 'Invalid move'}"
+
+        if p1_is_disqualified:
+            players[1].is_alive = False
+            termination_reason = f"p1 error: {p1_error or 'Invalid move'}"
+
+        # If either bot was disqualified, end the game immediately.
+        # The winner will be determined by who is still alive.
+        if p0_is_disqualified or p1_is_disqualified:
+            break
 
         # 3. Set intended directions
         players[0].direction = move_map[p0_move]

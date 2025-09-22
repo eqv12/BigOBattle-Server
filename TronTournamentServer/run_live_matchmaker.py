@@ -118,66 +118,63 @@ def find_opponent_for(player, all_players, use_info=True):
 
 
 def main():
-    print("🚀 Starting Live Matchmaking System...")
-    match_queue = matchmaker.start_matchmaker()
+    print("🚀 Starting Serial Matchmaking System...")
     tick_counter = 0
+    stuck_counter = 0
 
     while True:
         print(f"\n--- Matchmaker Tick {tick_counter} ---")
         tick_counter += 1
         
         all_eligible_players = db_handler.get_teams_for_matchmaking()
-        if not all_eligible_players:
-            print("No players available. Waiting...")
+        if len(all_eligible_players) < 2:
+            print("Not enough players to make a match. Waiting...")
             time.sleep(10)
             continue
 
-        match_found = False
+        match_made = False
         
-        # Decide whether this is a calibration tick or a general tick
+        # Decide which pool of players to use for this tick
         is_calibration_tick = (tick_counter % (config.MATCHMAKING_RATIO + 1)) != 0
-
+        
+        candidate_pool = []
         if is_calibration_tick:
-            # --- PRIORITY 1: CALIBRATION ROUND-ROBIN ---
-            calibration_candidates = [p for p in all_eligible_players if p['matches_played'] < config.CALIBRATION_MATCHES]
-            if calibration_candidates:
-                print(f"Mode: Calibration. Candidates: {len(calibration_candidates)}")
-                for candidate in calibration_candidates:
-                    opponent = find_opponent_for(candidate, all_eligible_players)
-                    if opponent:
-                        player_to_match = candidate
-                        print(f"✅ Found calibration match: {player_to_match['name']} vs {opponent['name']}")
-                        # Queue the match and break from the loop
-                        match_queue.put({'team_a_id': player_to_match['id'], 'team_b_id': opponent['id'], 'is_ranked': True, 'round': -1})
-                        match_found = True
-                        break 
-            else:
-                print("Mode: Calibration. No candidates found.")
+            candidate_pool = [p for p in all_eligible_players if p['matches_played'] < config.CALIBRATION_MATCHES]
+            print(f"Mode: Calibration. Candidates: {len(candidate_pool)}")
+        else:
+            candidate_pool = [p for p in all_eligible_players if p['matches_played'] >= config.CALIBRATION_MATCHES]
+            print(f"Mode: General. Candidates: {len(candidate_pool)}")
 
-        # If it's not a calibration tick OR if no calibration match was found, try general matchmaking.
-        if not match_found:
-            # --- PRIORITY 2: GENERAL MATCHMAKING ROUND-ROBIN ---
-            calibrated_players = [p for p in all_eligible_players if p['matches_played'] >= config.CALIBRATION_MATCHES]
-            if calibrated_players:
-                print(f"Mode: General. Candidates: {len(calibrated_players)}")
-                # Loop through players sorted by RD and find the first possible match
-                for player in calibrated_players:
-                    opponent = find_opponent_for(player, all_eligible_players)
-                    if opponent:
-                        player_to_match = player
-                        print(f"✅ Found general match: {player_to_match['name']} vs {opponent['name']}")
-                        # Queue the match and break from the loop
-                        match_queue.put({'team_a_id': player_to_match['id'], 'team_b_id': opponent['id'], 'is_ranked': True, 'round': -1})
-                        match_found = True
-                        break
-            else:
-                print("Mode: General. No candidates found.")
-
-        if not match_found:
+        # Now, try to find a match using the chosen pool
+        if candidate_pool:
+            for player in candidate_pool:
+                opponent = find_opponent_for(player, all_eligible_players)
+                if opponent:
+                    matchmaker.run_single_match(player['id'], opponent['id'])
+                    match_made = True
+                    break # Found one match for this tick, that's enough.
+        
+        # --- Shutdown logic ---
+        if not match_made:
             print("Could not find any suitable matches this tick.")
+            # Check if all players have a stable rating.
+            all_rds = [p['rd'] for p in all_eligible_players]
+            if all(rd < config.STABLE_RD_THRESHOLD for rd in all_rds):
+                print(f"\n✅ All active players have a stable RD below {config.STABLE_RD_THRESHOLD}. Shutting down.")
+                break
+        # --- NEW: Check if the system is stuck ---
+        if not match_made:
+            stuck_counter += 1
+        else:
+            stuck_counter = 0 # Reset counter if a match was made
 
-        time.sleep(5)
+        if stuck_counter >= config.STUCK_TICKS_BEFORE_STOP:
+            print(f"\n🚫 No matches found for {config.STUCK_TICKS_BEFORE_STOP} ticks. Assuming system is stuck. Shutting down.")
+            break
+        # We no longer need a sleep here if we are running at max speed
+        # time.sleep(5) 
 
+    print("--- Matchmaking has concluded. ---")
 
 if __name__ == "__main__":
     main()

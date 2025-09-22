@@ -30,10 +30,10 @@ FIRST_MOVE_TIMEOUT_S = 3.0
 
 # The number of matches a new bot submission should play to get an
 # initial, more accurate rating.
-CALIBRATION_MATCHES = 3
+CALIBRATION_MATCHES = 5
 
 # The range (+/-) within which the matchmaker will pair opponents.
-MATCHMAKING_RATING_WINDOW = 200
+MATCHMAKING_RATING_WINDOW = 300
 
 DEFAULT_RD = 350.0
 
@@ -47,3 +47,18 @@ MATCHMAKING_RATIO = 3
 reset_full=True
 
 SUBMISSION_RATE_LIMIT_MINUTES = 2
+
+MAX_REMATCHES = 3
+
+# The number of consecutive ticks with no general matches found before the
+# live matchmaker will automatically shut down.
+IDLE_TICKS_BEFORE_STOP = 100
+
+
+# The RD value below which a player is considered "stable". The matchmaker
+# will stop when all active players are below this threshold.
+STABLE_RD_THRESHOLD = 90.0
+
+# If no matches are found for this many consecutive ticks, assume the
+# system is stuck and shut down.
+STUCK_TICKS_BEFORE_STOP = 300

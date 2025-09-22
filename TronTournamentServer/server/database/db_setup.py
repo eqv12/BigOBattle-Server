@@ -47,20 +47,15 @@ def setup_database():
             status TEXT NOT NULL DEFAULT 'new',
             active_bot_path TEXT,
             last_submission DATETIME,
-
-            -- Glicko-2 ratings for the LIVE LEADERBOARD
             rating REAL NOT NULL,
             rd REAL NOT NULL,
             vol REAL NOT NULL,
-
-            -- Glicko-2 ratings for the FINAL TOURNAMENT
             final_rating REAL NOT NULL,
             final_rd REAL NOT NULL,
             final_vol REAL NOT NULL,
-
-            -- Columns for the new live matchmaking system
             matches_played INTEGER NOT NULL DEFAULT 0,
-            last_played_at DATETIME
+            last_played_at DATETIME,
+            is_playing INTEGER NOT NULL DEFAULT 0
         )
     ''')
 

@@ -205,7 +205,7 @@ def get_teams_for_matchmaking():
             final_rd AS rd,
             matches_played
         FROM teams
-        WHERE active_bot_path IS NOT NULL AND active_bot_path != ''
+        WHERE active_bot_path IS NOT NULL AND active_bot_path != '' AND is_playing = 0
         ORDER BY rd DESC
         """
     ).fetchall()
@@ -255,7 +255,7 @@ def have_teams_played_before(team_a_id, team_b_id):
     ).fetchone()[0]
     
     conn.close()
-    return count > 0
+    return count > config.MAX_REMATCHES
 
 def reset_team_stats_for_recalibration(team_id):
     """
@@ -281,6 +281,39 @@ def reset_team_stats_for_recalibration(team_id):
     conn.commit()
     conn.close()
     print(f"🔄 Reset stats for Team ID {team_id} for recalibration.")
+
+def reserve_teams(team_a_id, team_b_id):
+    """
+    Atomically reserves two teams for a match if they are not already playing.
+    Returns True on success, False on failure.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Start a transaction
+        cur.execute("BEGIN")
+        # Check if either team is already playing
+        cur.execute("SELECT is_playing FROM teams WHERE id IN (?, ?)", (team_a_id, team_b_id))
+        if any(row['is_playing'] for row in cur.fetchall()):
+            conn.rollback() # Another process got them first
+            return False
+        # Reserve both teams
+        cur.execute("UPDATE teams SET is_playing = 1 WHERE id IN (?, ?)", (team_a_id, team_b_id))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def release_teams(team_a_id, team_b_id):
+    """Releases two teams after their match is complete."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE teams SET is_playing = 0 WHERE id IN (?, ?)", (team_a_id, team_b_id))
+    conn.commit()
+    conn.close()
 
 def get_replay_data(match_id):
     """
