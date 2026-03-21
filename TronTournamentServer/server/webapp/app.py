@@ -5,7 +5,11 @@ import os
 import shutil
 from server import config
 import zipfile
+import uuid
+from server.logic import engine
+import json
 from flask import Flask, request, jsonify # type: ignore
+
 
 # --- Project-specific imports ---
 # These imports assume you run this from the project root with `python -m server.webapp.app`
@@ -136,6 +140,114 @@ def handle_bot_submission():
 
     
     return jsonify({"message": f"Bot for {team_name} uploaded successfully!"}), 200
+
+# In server/webapp/app.py
+
+@app.route('/leaderboard', methods=['GET'])
+def get_leaderboard():
+    """
+    Returns the top rated teams for the live dashboard.
+    """
+    # 1. Fetch all teams from the database
+    all_teams = db_handler.get_all_teams()
+    
+    # 2. Sort them by Rating (Descending)
+    sorted_teams = sorted(all_teams, key=lambda x: x['rating'], reverse=True)
+    
+    # 3. Format the data for the frontend
+    leaderboard_data = []
+    for rank, team in enumerate(sorted_teams, 1):
+        # Calculate a simple Win Rate for display
+        wins = team.get('wins', 0)
+        losses = team.get('losses', 0)
+        draws = team.get('draws', 0)
+        total_games = wins + losses + draws
+        win_rate = 0.0
+        if total_games > 0:
+            win_rate = round((wins / total_games) * 100, 1)
+
+        leaderboard_data.append({
+            "rank": rank,
+            "team_name": team['name'],
+            "rating": int(team['rating']),
+            "matches_played": total_games,
+            "win_rate": f"{win_rate}%",
+            "rd": int(team['rd'])
+        })
+    
+    # Return top 50 only to keep it light
+    return jsonify(leaderboard_data[:50])
+
+# In server/webapp/app.py
+
+@app.route('/test', methods=['POST'])
+def handle_test_match():
+    """
+    Runs a quick, unranked match between the uploaded code and a CPU bot.
+    Returns the GameState.json immediately.
+    """
+    # 1. Basic Validation
+    if 'bot_zip_file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    opponent_type = request.form.get('opponent', 'random') # Default to random
+    file = request.files['bot_zip_file']
+    
+    # 2. Create a temporary isolation chamber for this test
+    # We use a UUID so multiple people can test at once without overwriting
+    test_id = str(uuid.uuid4())
+    test_dir = os.path.join(config.BOTS_DIR, f"test_{test_id}")
+    os.makedirs(test_dir)
+
+    try:
+        # 3. Unzip the User's Bot
+        with zipfile.ZipFile(file, 'r') as zip_ref:
+            zip_ref.extractall(test_dir)
+        
+        # Identify the user's run file
+        # (This is a simplified check; in prod we'd look for run.sh recursively)
+        user_bot_path = os.path.join(test_dir, "run.sh").replace('\\', '/')
+        if not os.path.exists(user_bot_path):
+             # Try to find it if it's in a subfolder
+             for root, dirs, files in os.walk(test_dir):
+                 if "run.sh" in files:
+                     user_bot_path = os.path.join(root, "run.sh").replace('\\', '/')
+                     break
+
+        # 4. Select the Opponent
+        # We point to the local copies of the starter bots on the server
+        opponent_map = {
+            "random": "bots/random_bot/run.sh",
+            "greedy": "bots/space_filler_bot/run.sh", # Assuming you have this
+            "self": user_bot_path # Play against yourself
+        }
+        
+        opponent_path = opponent_map.get(opponent_type)
+        if not opponent_path or (opponent_type != 'self' and not os.path.exists(opponent_path)):
+             # Fallback to random if the requested bot is missing
+             opponent_path = "bots/random_bot/run.sh"
+
+        # 5. Run the Engine DIRECTLY (Bypass the Queue)
+        # We pass the paths directly to the engine
+        match_result = engine.run_match(user_bot_path, opponent_path)
+        
+        # 6. Return the Replay Data
+        # The frontend will use this to render the match
+        return jsonify({
+            "status": "success",
+            "winner": match_result['winner'],
+            "replay": json.loads(match_result['replay']), # Parse string to JSON object
+            "termination": match_result['termination_reason']
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
+    finally:
+        # 7. Cleanup: Delete the temp folder
+        if os.path.exists(test_dir):
+            shutil.rmtree(test_dir)
+
 
 # --- This block allows you to run the server directly ---
 if __name__ == '__main__':
