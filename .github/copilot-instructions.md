@@ -9,11 +9,12 @@ EMERGENT is a single-developer college project: a single-server LAN coding game 
 
 ## Where Detailed Instructions Live
 Read module-specific instructions in docs/instructions before making major changes ONLY READ THE RELEVANT FILES TO THE PART OF THE CODE YOU ARE WORKING ON. The files are:
-- 01-architecture-stack.md
-- 02-execution-engine.md
-- 03-match-workflow-and-queues.md
-- 04-game-logic-and-replay.md
-- 05-ranking-and-leaderboard.md
+- 06-frontend-ui-and-editor.md
+
+also use docs/map.md to understand the project directory structure and where different concerns live.
+
+Refer to the docs/plan.md for the overall build plan and current product decisions as well as where we are currently in that plan.
+Update the plan.md as we make progress and lock in more product decisions. This is a living document that should reflect the current state of the project and the next steps.
 
 If behavior is not documented THEN ALWAYS ASK ABOUT WHAT TO DO.
 

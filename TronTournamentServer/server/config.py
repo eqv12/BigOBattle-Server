@@ -24,6 +24,7 @@ MOVE_TIMEOUT_S = 0.5
 MEMORY_LIMIT_MB = 256
 DATABASE_FILE = "server/database/tournament.db"
 BOTS_DIR ="bots_official"
+ROOM_BOTS_DIR = "bots_submissions"
 
 #in case stuff needs time to startup
 FIRST_MOVE_TIMEOUT_S = 3.0

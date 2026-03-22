@@ -3,250 +3,343 @@
 import datetime
 import os
 import shutil
-from server import config
 import zipfile
 import uuid
-from server.logic import engine
 import json
-from flask import Flask, request, jsonify # type: ignore
+from server.logic import matchmaker
+from server.logic import engine
+from flask import Flask, request, jsonify, render_template # type: ignore
 
 
 # --- Project-specific imports ---
 # These imports assume you run this from the project root with `python -m server.webapp.app`
 from server import config
 from server.database import db_handler
+from server.games.catalog import get_game, list_games
 
 # 1. Initialize the Flask Application
 app = Flask(__name__)
+db_handler.ensure_room_schema()
+_match_queue = None
 
-# --- Placeholder Authentication ---
-# In a real application, this would check a browser session or an API token.
-# For now, we'll just hardcode it to always return the same team name for testing.
-def get_authenticated_team_name():
-    """
-    A placeholder function for user authentication.
-    TODO: Replace this with a real login system later.
-    """
-    return "Team-2" # Assume the user is always Team-1 for now
+
+def _ensure_match_queue():
+    global _match_queue
+    if _match_queue is None:
+        _match_queue = matchmaker.start_matchmaker()
+    return _match_queue
+
+
+def _extract_bot_zip(file_storage, destination_path):
+    """Extract a submitted ZIP into destination_path and normalize single-root zips."""
+    if os.path.exists(destination_path):
+        shutil.rmtree(destination_path)
+    os.makedirs(destination_path, exist_ok=True)
+
+    temp_extract_path = os.path.join(destination_path, "temp_extraction")
+    os.makedirs(temp_extract_path, exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(file_storage, 'r') as zip_ref:
+            zip_ref.extractall(temp_extract_path)
+
+        extracted_items = os.listdir(temp_extract_path)
+        if len(extracted_items) == 1 and os.path.isdir(os.path.join(temp_extract_path, extracted_items[0])):
+            root_folder = os.path.join(temp_extract_path, extracted_items[0])
+            for item in os.listdir(root_folder):
+                shutil.move(os.path.join(root_folder, item), destination_path)
+        else:
+            for item in extracted_items:
+                shutil.move(os.path.join(temp_extract_path, item), destination_path)
+    finally:
+        if os.path.exists(temp_extract_path):
+            shutil.rmtree(temp_extract_path)
+
+
+def _parse_db_datetime(value):
+    if not value:
+        return None
+    for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
+        try:
+            return datetime.datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _pick_room_pair(room_id):
+    participants = db_handler.get_matchable_room_participants(room_id)
+    if len(participants) < 2:
+        return None
+
+    for i, p0 in enumerate(participants):
+        for p1 in participants[i + 1:]:
+            if not db_handler.have_room_participants_played_since_submission(room_id, p0['id'], p1['id']):
+                return p0, p1
+
+    # Fallback: if everyone has played recently, just pick top two by current ordering
+    return participants[0], participants[1]
 
 # --- Web Routes (API Endpoints) ---
 
 @app.route('/')
 def index():
-    """A simple homepage to confirm the server is running."""
-    return "<h1>Tron Tournament Server is Online!</h1>"
-
-# In server/webapp/app.py, REPLACE your handle_bot_submission function with this:
-
-# In server/webapp/app.py, REPLACE your handle_bot_submission function with this:
-
-@app.route('/submit', methods=['POST'])
-def handle_bot_submission():
-    """Handles the zipped bot file submission with direct authentication."""
-    
-    # 1. Get credentials and file from the form submission.
-    if 'team_name' not in request.form:
-        return jsonify({"error": "Missing team_name in form data"}), 400
-    
-    team_name = request.form['team_name']
+    return render_template('index.html')
 
 
-    # --- ADD THIS NEW BLOCK FOR RATE LIMITING ---
-    team = db_handler.get_team_by_name(team_name)
-    if team and team['last_submission']:
-        # Convert the string from the DB back into a datetime object
-        last_sub_time = datetime.datetime.strptime(team['last_submission'], '%Y-%m-%d %H:%M:%S.%f')
-        time_since_last_sub = datetime.datetime.now() - last_sub_time
-        
-        limit_seconds = config.SUBMISSION_RATE_LIMIT_MINUTES * 60
-        if time_since_last_sub.total_seconds() < limit_seconds:
-            wait_time = limit_seconds - time_since_last_sub.total_seconds()
-            return jsonify({"error": f"Rate limit exceeded. Please wait {int(wait_time)} more seconds."}), 429 # "Too Many Requests"
+@app.route('/api/rooms', methods=['POST'])
+def create_room():
+    payload = request.get_json(silent=True) or {}
+    game_key = str(payload.get('game_key', 'tron')).strip().lower()
+    if not game_key:
+        return jsonify({'error': 'game_key is required'}), 400
 
-    # --- END OF NEW BLOCK ---
-
-    # ... (the rest of the function continues as normal) ...
+    room = db_handler.create_room(game_key)
+    return jsonify({
+        'room_code': room['room_code'],
+        'admin_password': room['admin_password'],
+        'game_key': room['game_key'],
+    }), 201
 
 
-    if not config.ALLOW_PASSWORDLESS_SUBMISSIONS:
-        if 'password' not in request.form:
-            return jsonify({"error": "Missing password in form data"}), 400
-        password = request.form['password']
-        if not db_handler.verify_team_credentials(team_name, password):
-            return jsonify({"error": "Authentication failed: Invalid credentials"}), 401
-    
-                
-    # 2. Authenticate the user against the database.
-    # if not db_handler.verify_team_credentials(team_name, password):
-    #     return jsonify({"error": "Authentication failed: Invalid credentials"}), 401
+@app.route('/api/games', methods=['GET'])
+def get_games():
+    return jsonify(list_games()), 200
 
-    # 3. Check if a file was included in the request.
+
+@app.route('/api/games/<game_key>', methods=['GET'])
+def get_game_details(game_key):
+    game = get_game(game_key)
+    if not game:
+        return jsonify({'error': 'Unknown game'}), 404
+    return jsonify(game), 200
+
+
+@app.route('/api/rooms/<room_code>/join', methods=['POST'])
+def join_room(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    payload = request.get_json(silent=True) or {}
+    display_name = str(payload.get('display_name', '')).strip()
+    if not display_name:
+        return jsonify({'error': 'display_name is required'}), 400
+
+    participant, created = db_handler.get_or_create_participant(room['id'], display_name)
+    return jsonify({
+        'participant_id': participant['id'],
+        'display_name': participant['display_name'],
+        'created': created,
+        'room_code': room['room_code'],
+        'game_key': room['game_key'],
+    }), 200
+
+
+@app.route('/api/rooms/<room_code>/submit', methods=['POST'])
+def submit_room_bot(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    display_name = str(request.form.get('display_name', '')).strip()
+    password = str(request.form.get('password', '')).strip()
+    if not display_name:
+        return jsonify({'error': 'Missing display_name in form data'}), 400
+    if not password:
+        return jsonify({'error': 'Missing password in form data'}), 400
     if 'bot_zip_file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-    
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    participant, _ = db_handler.get_or_create_participant(room['id'], display_name)
+
+    # Submission rate-limit per participant
+    last_sub_time = _parse_db_datetime(participant.get('last_submission_at'))
+    if last_sub_time:
+        delta = datetime.datetime.now() - last_sub_time
+        limit_seconds = config.SUBMISSION_RATE_LIMIT_MINUTES * 60
+        if delta.total_seconds() < limit_seconds:
+            wait_time = int(limit_seconds - delta.total_seconds())
+            return jsonify({'error': f'Rate limit exceeded. Please wait {wait_time} more seconds.'}), 429
+
+    is_valid, is_first_set = db_handler.set_or_verify_participant_password(participant['id'], password)
+    if not is_valid:
+        return jsonify({'error': 'Authentication failed: Invalid password for this display_name'}), 401
+
     file = request.files['bot_zip_file']
     if file.filename == '':
-        return jsonify({"error": "No file selected for uploading"}), 400
+        return jsonify({'error': 'No file selected for uploading'}), 400
 
-    # 4. Define the final destination path and clean it out.
-    destination_path = os.path.join(config.BOTS_DIR, team_name)
-    if os.path.exists(destination_path):
-        shutil.rmtree(destination_path)
-    os.makedirs(destination_path)
-
-    # --- NEW LOGIC STARTS HERE ---
-
-    # 5. Create a temporary directory for extraction.
-    temp_extract_path = os.path.join(destination_path, "temp_extraction")
-    os.makedirs(temp_extract_path)
-
+    destination_path = os.path.join(config.ROOM_BOTS_DIR, room_code, display_name)
     try:
-        # 6. Extract the zip file into the temporary directory.
-        with zipfile.ZipFile(file, 'r') as zip_ref:
-            zip_ref.extractall(temp_extract_path)
-
-        # 7. Find the created subfolder and move its contents to the destination.
-        extracted_items = os.listdir(temp_extract_path)
-        
-        # Check if the zip contained a single root folder.
-        if len(extracted_items) == 1 and os.path.isdir(os.path.join(temp_extract_path, extracted_items[0])):
-            unzipped_root_folder = os.path.join(temp_extract_path, extracted_items[0])
-            # Move each item from the subfolder to the destination
-            for item in os.listdir(unzipped_root_folder):
-                shutil.move(os.path.join(unzipped_root_folder, item), destination_path)
-        else:
-            # If no single root folder, move all extracted items directly.
-            for item in extracted_items:
-                shutil.move(os.path.join(temp_extract_path, item), destination_path)
-
+        _extract_bot_zip(file, destination_path)
     except zipfile.BadZipFile:
-        return jsonify({"error": "Invalid file format. Please upload a ZIP file."}), 400
-    finally:
-        # 8. Clean up the temporary directory.
-        if os.path.exists(temp_extract_path):
-            shutil.rmtree(temp_extract_path)
-    
-    # --- NEW LOGIC ENDS HERE ---
+        return jsonify({'error': 'Invalid file format. Please upload a ZIP file.'}), 400
 
-    # 9. Update the database.
-    team = db_handler.get_team_by_name(team_name)
-    if team:
-        # run_script_path = os.path.join(destination_path, 'run.sh')
-        run_script_path = os.path.join(destination_path, 'run.sh').replace('\\', '/')
-        db_handler.update_bot_path(team['id'], run_script_path)
+    run_script_path = os.path.join(destination_path, 'run.sh').replace('\\', '/')
+    if not os.path.exists(run_script_path):
+        return jsonify({'error': "Missing required file 'run.sh' in submitted ZIP"}), 400
 
-        #resets the stats for new submission
-        db_handler.reset_team_stats_for_recalibration(team['id'])
+    db_handler.update_participant_bot_path(participant['id'], run_script_path)
+    return jsonify({
+        'message': f'Bot for {display_name} uploaded successfully',
+        'room_code': room_code,
+        'display_name': display_name,
+        'password_initialized': is_first_set,
+    }), 200
 
-    
-    return jsonify({"message": f"Bot for {team_name} uploaded successfully!"}), 200
 
-# In server/webapp/app.py
+@app.route('/api/rooms/<room_code>/leaderboard', methods=['GET'])
+def get_room_leaderboard(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
 
-@app.route('/leaderboard', methods=['GET'])
-def get_leaderboard():
-    """
-    Returns the top rated teams for the live dashboard.
-    """
-    # 1. Fetch all teams from the database
-    all_teams = db_handler.get_all_teams()
-    
-    # 2. Sort them by Rating (Descending)
-    sorted_teams = sorted(all_teams, key=lambda x: x['rating'], reverse=True)
-    
-    # 3. Format the data for the frontend
-    leaderboard_data = []
-    for rank, team in enumerate(sorted_teams, 1):
-        # Calculate a simple Win Rate for display
-        wins = team.get('wins', 0)
-        losses = team.get('losses', 0)
-        draws = team.get('draws', 0)
-        total_games = wins + losses + draws
-        win_rate = 0.0
-        if total_games > 0:
-            win_rate = round((wins / total_games) * 100, 1)
-
-        leaderboard_data.append({
-            "rank": rank,
-            "team_name": team['name'],
-            "rating": int(team['rating']),
-            "matches_played": total_games,
-            "win_rate": f"{win_rate}%",
-            "rd": int(team['rd'])
+    rows = db_handler.get_room_leaderboard(room['id'], limit=100)
+    data = []
+    for rank, row in enumerate(rows, 1):
+        data.append({
+            'rank': rank,
+            'display_name': row['display_name'],
+            'rating': int(row['rating']),
+            'rd': int(row['rd']),
+            'matches_played': row['matches_played'],
         })
-    
-    # Return top 50 only to keep it light
-    return jsonify(leaderboard_data[:50])
+    return jsonify(data), 200
 
-# In server/webapp/app.py
 
-@app.route('/test', methods=['POST'])
-def handle_test_match():
-    """
-    Runs a quick, unranked match between the uploaded code and a CPU bot.
-    Returns the GameState.json immediately.
-    """
-    # 1. Basic Validation
+@app.route('/api/rooms/<room_code>/matches/recent', methods=['GET'])
+def get_room_recent_matches(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    limit = request.args.get('limit', default=20, type=int)
+    limit = max(1, min(limit, 100))
+    matches = db_handler.get_recent_room_matches(room['id'], limit=limit)
+    return jsonify(matches), 200
+
+
+@app.route('/api/rooms/<room_code>/matches/<int:match_id>/replay', methods=['GET'])
+def get_room_match_replay(room_code, match_id):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    replay_payload = db_handler.get_room_match_replay(room['id'], match_id)
+    if not replay_payload:
+        return jsonify({'error': 'Replay not found'}), 404
+    return jsonify(replay_payload), 200
+
+
+@app.route('/api/rooms/<room_code>/matches/<int:match_id>/raw-output', methods=['GET'])
+def get_room_match_raw_output(room_code, match_id):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    payload = db_handler.get_room_match_raw_output(room['id'], match_id)
+    if not payload:
+        return jsonify({'error': 'Raw output not found'}), 404
+    return jsonify(payload), 200
+
+
+@app.route('/api/rooms/<room_code>/test', methods=['POST'])
+def test_room_bot(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
     if 'bot_zip_file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-    
-    opponent_type = request.form.get('opponent', 'random') # Default to random
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    tier = str(request.form.get('tier', 'tier1')).strip().lower()
     file = request.files['bot_zip_file']
-    
-    # 2. Create a temporary isolation chamber for this test
-    # We use a UUID so multiple people can test at once without overwriting
+
     test_id = str(uuid.uuid4())
-    test_dir = os.path.join(config.BOTS_DIR, f"test_{test_id}")
-    os.makedirs(test_dir)
+    test_dir = os.path.join(config.ROOM_BOTS_DIR, 'test', room_code, test_id)
+    os.makedirs(test_dir, exist_ok=True)
 
     try:
-        # 3. Unzip the User's Bot
-        with zipfile.ZipFile(file, 'r') as zip_ref:
-            zip_ref.extractall(test_dir)
-        
-        # Identify the user's run file
-        # (This is a simplified check; in prod we'd look for run.sh recursively)
-        user_bot_path = os.path.join(test_dir, "run.sh").replace('\\', '/')
+        _extract_bot_zip(file, test_dir)
+        user_bot_path = os.path.join(test_dir, 'run.sh').replace('\\', '/')
+
         if not os.path.exists(user_bot_path):
-             # Try to find it if it's in a subfolder
-             for root, dirs, files in os.walk(test_dir):
-                 if "run.sh" in files:
-                     user_bot_path = os.path.join(root, "run.sh").replace('\\', '/')
-                     break
+            return jsonify({'error': "Missing required file 'run.sh' in submitted ZIP"}), 400
 
-        # 4. Select the Opponent
-        # We point to the local copies of the starter bots on the server
-        opponent_map = {
-            "random": "bots/random_bot/run.sh",
-            "greedy": "bots/space_filler_bot/run.sh", # Assuming you have this
-            "self": user_bot_path # Play against yourself
-        }
-        
-        opponent_path = opponent_map.get(opponent_type)
-        if not opponent_path or (opponent_type != 'self' and not os.path.exists(opponent_path)):
-             # Fallback to random if the requested bot is missing
-             opponent_path = "bots/random_bot/run.sh"
+        benchmark_path = os.path.join(
+            'bots_official', 'games', room['game_key'], 'benchmarks', tier, 'run.sh'
+        ).replace('\\', '/')
 
-        # 5. Run the Engine DIRECTLY (Bypass the Queue)
-        # We pass the paths directly to the engine
-        match_result = engine.run_match(user_bot_path, opponent_path)
-        
-        # 6. Return the Replay Data
-        # The frontend will use this to render the match
+        if not os.path.exists(benchmark_path):
+            return jsonify({'error': f'Benchmark bot not found for {room["game_key"]}:{tier}'}), 400
+
+        match_result = engine.run_match(user_bot_path, benchmark_path)
+        replay = json.loads(match_result['replay'])
+
         return jsonify({
-            "status": "success",
-            "winner": match_result['winner'],
-            "replay": json.loads(match_result['replay']), # Parse string to JSON object
-            "termination": match_result['termination_reason']
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-        
+            'status': 'success',
+            'winner': match_result['winner'],
+            'termination': match_result['termination_reason'],
+            'replay': replay,
+            'raw_output': replay.get('result', {}).get('bot_raw_outputs', {}),
+        }), 200
     finally:
-        # 7. Cleanup: Delete the temp folder
         if os.path.exists(test_dir):
             shutil.rmtree(test_dir)
+
+
+@app.route('/api/rooms/<room_code>/queue-match', methods=['POST'])
+def queue_room_match(room_code):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    payload = request.get_json(silent=True) or {}
+    participant_a_id = payload.get('participant_a_id')
+    participant_b_id = payload.get('participant_b_id')
+
+    if participant_a_id is None or participant_b_id is None:
+        pair = _pick_room_pair(room['id'])
+        if not pair:
+            return jsonify({'error': 'Need at least two participants with uploaded bots to queue a match'}), 400
+        p0, p1 = pair
+        participant_a_id = p0['id']
+        participant_b_id = p1['id']
+
+    p0 = db_handler.get_room_participant_by_id(int(participant_a_id))
+    p1 = db_handler.get_room_participant_by_id(int(participant_b_id))
+    if not p0 or not p1 or p0['room_id'] != room['id'] or p1['room_id'] != room['id']:
+        return jsonify({'error': 'Invalid participant ids for this room'}), 400
+    if not p0.get('active_bot_path') or not p1.get('active_bot_path'):
+        return jsonify({'error': 'Both participants must have submitted bots before queueing a match'}), 400
+
+    queue = _ensure_match_queue()
+    queue.put({
+        'queue_type': 'room',
+        'room_id': room['id'],
+        'room_code': room_code,
+        'game_key': room['game_key'],
+        'participant_a_id': int(participant_a_id),
+        'participant_b_id': int(participant_b_id),
+        'is_ranked': True,
+    })
+
+    return jsonify({
+        'status': 'queued',
+        'room_code': room_code,
+        'game_key': room['game_key'],
+        'participant_a_id': int(participant_a_id),
+        'participant_b_id': int(participant_b_id),
+    }), 202
+
+@app.route('/submit', methods=['POST'])
+@app.route('/leaderboard', methods=['GET'])
+@app.route('/test', methods=['POST'])
+def legacy_endpoint_removed():
+    return jsonify({
+        'error': 'Legacy endpoint removed. Use room-first APIs under /api/rooms/*'
+    }), 410
 
 
 # --- This block allows you to run the server directly ---

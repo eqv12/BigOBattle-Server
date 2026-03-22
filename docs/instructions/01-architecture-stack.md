@@ -18,3 +18,17 @@ EMERGENT is a single-developer college project. It is a real-time, adversarial c
 ## Other Directives
 1. Preserve determinism and isolation. User code always runs in Docker with strict reproducibility.
 2. Keep errors parseable. Runtime/sandbox failures should map cleanly to user-facing line-level feedback.
+
+## Current Product Model (Room-First)
+- **Competition scope is Room-based:** Rankings are tracked per room, not global.
+- **Minimal auth by design:**
+	- Admin creates room.
+	- Server generates `room_code` and admin password.
+	- Participants join via `room_code` and submit with a display name.
+	- First submission for a display name sets a password; later submissions must use that same password.
+- **Game selection is room-level:** Admin picks the room's game at creation time.
+
+## Structure Direction (Multi-Game)
+- Keep orchestration generic and game-agnostic.
+- Introduce a game plugin boundary (`games/base`, `games/registry`, `games/<game>/plugin`).
+- CPU benchmark bots must be organized per game (not in one shared flat bucket).

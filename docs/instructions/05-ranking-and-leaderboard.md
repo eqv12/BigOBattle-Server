@@ -14,3 +14,12 @@ We measure developer proficiency against fixed benchmarks to generate initial El
 3.  **Tier 3:** The toughest AI benchmark simulating full adversarial foresight. Tests a developer's grasp of distributed systems complexity and advanced game theory.
 
 These CPU bots act as the baseline opponents for "Test" runs.
+
+## Current Scope Decision: Room-Only Ratings
+- Ratings are maintained per room leaderboard only.
+- No global cross-room rating aggregation in current MVP.
+- A participant can have independent ratings in different rooms.
+
+## Practical Implementation Notes
+- Persist Glicko-2 values per room-participant tuple.
+- Match updates should only touch ratings inside the match's room.

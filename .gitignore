@@ -42,3 +42,6 @@ desktop.ini
 bots_official/
 
 TronTournamentServer/bots_official/
+
+node_modules/
+bots_submissions/

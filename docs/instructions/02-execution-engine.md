@@ -16,3 +16,15 @@ The Execution Engine provides a secure, deterministic environment for running ad
 ## 100% Determinism (Reliability)
 - **Reproducibility is Non-Negotiable.** The game engine must process inputs (bot commands) sequentially and deterministically.
 - If a match is re-run with the same bot code and the exact same random seed, the outcome and `GameState.json` log MUST be bit-for-bit identical to the original match. Unless of course the bot itself is random in which case this it wont be identical. The system from our end must be deterministic.
+
+## Multi-Language Runtime Policy (MVP)
+- Platform must support at least Python, Java, and C bot submissions.
+- Current practical approach: one execution image that contains all required runtimes/toolchains.
+  - Pros: simple ops, no scheduling complexity, easy local reproducibility.
+  - Cons: larger image size.
+- Future optimization path (optional): per-language images selected by submission metadata.
+
+### Recommendation for now
+- Keep a single multi-language image until usage data indicates real pain.
+- Add per-language submission metadata and enforce language-specific starter `run.sh` contracts.
+- Revisit split images only when startup/pull/storage costs become measurable bottlenecks.

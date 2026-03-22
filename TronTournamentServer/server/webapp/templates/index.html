@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Emergent Rooms</title>
+	<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+	<div class="bg-orb bg-orb-a"></div>
+	<div class="bg-orb bg-orb-b"></div>
+
+	<header class="hero">
+		<p class="eyebrow">EMERGENT</p>
+		<h1>Room-First Bot Arena</h1>
+		<p class="subtitle">Create rooms, submit bots, queue ranked matches, and track room-only skill ratings.</p>
+	</header>
+
+	<main class="grid">
+		<section class="card">
+			<h2>Create Room</h2>
+			<form id="createRoomForm">
+				<label>Game
+					<select name="game_key" required>
+						<option value="tron" selected>Tron</option>
+					</select>
+				</label>
+				<button type="submit">Create Room</button>
+			</form>
+			<div id="createRoomResult" class="result"></div>
+		</section>
+
+		<section class="card">
+			<h2>Join Room</h2>
+			<form id="joinRoomForm">
+				<label>Room Code
+					<input name="room_code" placeholder="e.g. XN00UH" required>
+				</label>
+				<label>Display Name
+					<input name="display_name" placeholder="Alice" required>
+				</label>
+				<button type="submit">Join</button>
+			</form>
+			<div id="joinRoomResult" class="result"></div>
+		</section>
+
+		<section class="card card-wide">
+			<h2>Submit Bot</h2>
+			<form id="submitBotForm" enctype="multipart/form-data">
+				<label>Room Code
+					<input name="room_code" required>
+				</label>
+				<label>Display Name
+					<input name="display_name" required>
+				</label>
+				<label>Password
+					<input name="password" type="password" required>
+				</label>
+				<label>Bot ZIP
+					<input name="bot_zip_file" type="file" accept=".zip" required>
+				</label>
+				<button type="submit">Upload Bot</button>
+			</form>
+			<div id="submitBotResult" class="result"></div>
+		</section>
+
+		<section class="card">
+			<h2>Queue Match</h2>
+			<form id="queueMatchForm">
+				<label>Room Code
+					<input name="room_code" required>
+				</label>
+				<button type="submit">Queue Best Pair</button>
+			</form>
+			<div id="queueMatchResult" class="result"></div>
+		</section>
+
+		<section class="card">
+			<h2>Room Monitor</h2>
+			<form id="monitorForm">
+				<label>Room Code
+					<input name="room_code" required>
+				</label>
+				<div class="form-row">
+					<button type="submit">Refresh Now</button>
+					<button type="button" id="toggleAutoRefresh">Start Auto Refresh</button>
+				</div>
+			</form>
+			<div id="monitorResult" class="result"></div>
+		</section>
+
+		<section class="card card-wide">
+			<h2>Leaderboard</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>Rank</th>
+						<th>Name</th>
+						<th>Rating</th>
+						<th>RD</th>
+						<th>Matches</th>
+					</tr>
+				</thead>
+				<tbody id="leaderboardBody">
+					<tr><td colspan="5" class="muted">No data yet.</td></tr>
+				</tbody>
+			</table>
+		</section>
+
+		<section class="card card-wide">
+			<h2>Recent Matches</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>ID</th>
+						<th>A</th>
+						<th>B</th>
+						<th>Winner</th>
+						<th>Termination</th>
+						<th>Played At</th>
+					</tr>
+				</thead>
+				<tbody id="matchesBody">
+					<tr><td colspan="6" class="muted">No matches yet.</td></tr>
+				</tbody>
+			</table>
+		</section>
+	</main>
+
+	<aside class="toast" id="toast"></aside>
+	<script src="/static/script.js"></script>
+</body>
+</html>

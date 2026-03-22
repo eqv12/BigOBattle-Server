@@ -14,3 +14,21 @@ The core of this system is the Redis Asynchronous Match Queue. We must handle su
 
 ## Scalability Constraint
 The backend architecture (single-server LAN deployment) as much concurrent matches as possible. We need to keep the system lean and efficient and fast.
+
+## Room Workflow (Current)
+1. **Admin Creates Room:** backend generates room code and admin password, and stores selected game key.
+2. **Participant Joins Room:** participant provides display name and room code.
+3. **Participant Submits Bot:**
+	 - First submit for `(room_code, display_name)` sets password.
+	 - Next submits require password verification.
+4. **Dispatching:** submit jobs enqueue room-scoped match requests.
+5. **Referee Execution:** workers run matches only within the room and selected game.
+6. **Room Leaderboard Update:** rating updates are written only to that room context.
+
+## Matchmaking Policy (Pragmatic for MVP)
+- Keep matchmaking simple and stable, not production-grade strict.
+- Constraints:
+	- no self-play
+	- avoid immediate repeat pairings when practical
+	- one active match job per participant at a time
+	- prioritize participants with high RD / low recent activity
