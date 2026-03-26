@@ -31,9 +31,21 @@ def get_bot_response(bot_proc, json_data, timeout_s):
             if line:
                 result["move"] = json.loads(line).get("move")
             else:
-                result["error"] = "Bot exited or sent empty response."
+                bot_proc.poll()
+                rc = bot_proc.returncode
+                if rc == 137 or rc == -9:
+                    result["error"] = "OOM: Memory limit exceeded."
+                elif rc is not None:
+                    result["error"] = f"Bot exited unexpectedly with code {rc}."
+                else:
+                    result["error"] = "Bot exited or sent empty response."
         except (IOError, json.JSONDecodeError) as e:
-            result["error"] = f"Invalid JSON or I/O Error: {e}"
+            bot_proc.poll()
+            rc = bot_proc.returncode
+            if rc == 137 or rc == -9:
+                result["error"] = "OOM: Memory limit exceeded."
+            else:
+                result["error"] = f"Invalid JSON or I/O Error: {e}"
         except Exception as e:
             result["error"] = f"Unknown bot error: {e}"
 
@@ -75,7 +87,7 @@ def run_match(bot_path_1, bot_path_2):
     )
 
     bot_procs = [p1_proc, p2_proc]
-    player_errors = {0: None, 1: None}
+    player_errors = {}
     turn_counter = {"value": 0}
     stderr_lines = {0: [], 1: []}
     turn_events = {}
@@ -97,7 +109,13 @@ def run_match(bot_path_1, bot_path_2):
         event[f"p{player_index}_move"] = response.get("move")
 
         if response["error"]:
-            player_errors[player_index] = response["error"]
+            envelope = {
+                "type": "timeout" if "Timeout" in response["error"] else ("oom" if "OOM" in response["error"] else "runtime"),
+                "message": response["error"],
+                "turn": turn_no,
+                "stdout_snippet": response.get("raw_output", "")[:200]
+            }
+            player_errors[player_index] = envelope
             event[f"p{player_index}_error"] = response["error"]
             return None
         return response["move"]
@@ -115,16 +133,28 @@ def run_match(bot_path_1, bot_path_2):
 
         referee_result = run_referee_match(plugin, match_config, _step)
 
+        error_envelope = {}
         termination_reason = referee_result.termination_reason
-        if player_errors[0] and not player_errors[1]:
-            termination_reason = f"p0 error: {player_errors[0]}"
-        elif player_errors[1] and not player_errors[0]:
-            termination_reason = f"p1 error: {player_errors[1]}"
-        elif player_errors[0] and player_errors[1]:
-            termination_reason = f"p0 error: {player_errors[0]} | p1 error: {player_errors[1]}"
+
+        for p_idx in (0, 1):
+            if player_errors.get(p_idx):
+                env = player_errors[p_idx]
+                env["stderr_snippet"] = "\n".join(stderr_lines[p_idx][-20:]) # last 20 lines
+                error_envelope[f"p{p_idx}"] = env
+
+        if error_envelope:
+            err_strs = []
+            if "p0" in error_envelope:
+                err_strs.append(f"p0 error: {error_envelope['p0']['message']}")
+            if "p1" in error_envelope:
+                err_strs.append(f"p1 error: {error_envelope['p1']['message']}")
+            termination_reason = " | ".join(err_strs)
 
         replay = json.loads(referee_result.replay)
         replay["result"]["termination"] = termination_reason
+        if error_envelope:
+            replay["result"]["error_envelope"] = error_envelope
+
         replay["result"]["turn_events"] = [
             {"turn": turn_no, **turn_events[turn_no]}
             for turn_no in sorted(turn_events.keys())

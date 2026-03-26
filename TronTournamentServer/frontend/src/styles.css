@@ -53,6 +53,11 @@ h1 { margin-top: 0; }
   cursor: pointer;
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn.secondary { background: linear-gradient(130deg, var(--green), #2c8b72); }
 
 .cards {
@@ -119,6 +124,36 @@ input, select {
   border-radius: 12px;
   padding: 10px;
   background: #fff;
+}
+
+.status-strip {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #faf8f2;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d7ccb8;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .tabs {

@@ -9,6 +9,7 @@ import {
   testBot,
   getMatchReplay,
   getMatchRawOutput,
+  getTestJobStatus,
 } from "../api";
 import { useRoom } from "../state";
 import ReplayViewer from "../components/replay/ReplayViewer";
@@ -47,8 +48,16 @@ export default function WorkspacePage() {
   const [replayPayload, setReplayPayload] = useState(null);
   const [rawOutput, setRawOutput] = useState(null);
   const [selectedMatchId, setSelectedMatchId] = useState(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testStatus, setTestStatus] = useState("Idle");
+  const [submitStatus, setSubmitStatus] = useState(null);
 
   const roomReady = useMemo(() => roomCode && displayName, [roomCode, displayName]);
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const formatNow = () => new Date().toLocaleString();
 
   const onLanguageChange = (nextLanguage) => {
     setLanguage(nextLanguage);
@@ -90,39 +99,95 @@ export default function WorkspacePage() {
 
   const onSubmit = async () => {
     if (!roomReady) return;
+    if (!password) {
+      setLogs("Please enter your submission password before submitting.");
+      setTab("logs");
+      return;
+    }
     const zip = await buildSubmissionZip();
     const form = new FormData();
     form.set("display_name", displayName);
     form.set("password", password);
     form.set("bot_zip_file", zip, "bot.zip");
     try {
-      await submitBot(roomCode, form);
-      setLogs("Submit request sent.");
+      setIsSubmitting(true);
+      const data = await submitBot(roomCode, form);
+      const submittedAt = formatNow();
+      setSubmitStatus({
+        submittedAt,
+        message: data.message || "Submission accepted.",
+      });
+      setLogs(`Submission accepted at ${submittedAt}.`);
+      setTab("logs");
     } catch (err) {
       setLogs(err.message);
+      setTab("logs");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const onTest = async () => {
     if (!roomReady) return;
+    if (isTesting) return;
+
     const zip = await buildSubmissionZip();
     const form = new FormData();
     form.set("tier", tier);
     form.set("bot_zip_file", zip, "bot.zip");
+
+    setIsTesting(true);
+    setTestStatus(`Queued (${tier})`);
+    setLogs("Test queued.");
+    setTab("replay");
+
     try {
       const data = await testBot(roomCode, tier, form);
+
+      const jobId = data.job_id;
+      if (!jobId) {
+        throw new Error("Test response missing job_id.");
+      }
+
+      setTestStatus(`Running (${jobId})`);
+      let finalPayload = null;
+
+      for (let i = 0; i < 120; i += 1) {
+        await sleep(1000);
+        const status = await getTestJobStatus(roomCode, jobId);
+        setTestStatus(`${status.status || "unknown"} (${jobId})`);
+
+        if (status.status === "success") {
+          finalPayload = status;
+          break;
+        }
+        if (status.status === "failed") {
+          throw new Error(status.error || "Test job failed.");
+        }
+      }
+
+      if (!finalPayload) {
+        throw new Error("Timed out waiting for test result.");
+      }
+
       setReplayPayload({
-        game_key: gameKey || "tron",
-        replay: data.replay,
+        game_key: finalPayload.game_key || gameKey || "tron",
+        replay: finalPayload.replay,
       });
       setRawOutput({
-        bot_raw_outputs: data.raw_output,
-        turn_events: data.replay?.result?.turn_events || [],
+        bot_raw_outputs: finalPayload.raw_output || {},
+        turn_events: finalPayload.replay?.result?.turn_events || [],
       });
-      setLogs(`Test complete. Winner: ${data.winner}, termination: ${data.termination}`);
-      setTab("replay");
+      setLogs(
+        `Test complete. Winner: ${finalPayload.winner}, termination: ${finalPayload.termination}`
+      );
+      setTestStatus(`Completed (${jobId})`);
     } catch (err) {
       setLogs(err.message);
+      setTestStatus("Failed");
+      setTab("logs");
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -167,10 +232,14 @@ export default function WorkspacePage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <button className="btn secondary" onClick={onTest}>Test</button>
-            <button className="btn" onClick={onSubmit}>Submit</button>
-            <button className="btn secondary" onClick={onQueue}>Queue Match</button>
-            <button className="btn secondary" onClick={refresh}>Refresh</button>
+            <button className="btn secondary" onClick={onTest} disabled={isTesting || isSubmitting}>
+              {isTesting ? "Testing..." : "Test"}
+            </button>
+            <button className="btn" onClick={onSubmit} disabled={isSubmitting || isTesting}>
+              {isSubmitting ? "Submitting..." : "Submit"}
+            </button>
+            <button className="btn secondary" onClick={onQueue} disabled={isTesting || isSubmitting}>Queue Match</button>
+            <button className="btn secondary" onClick={refresh} disabled={isTesting || isSubmitting}>Refresh</button>
           </div>
           <Editor
             height="62vh"
@@ -182,6 +251,17 @@ export default function WorkspacePage() {
           />
         </div>
         <div className="sidepanel">
+          <div className="status-strip">
+            <div className="status-item">
+              <strong>Test:</strong> {testStatus}
+              {isTesting && <span className="spinner" aria-hidden="true" />}
+            </div>
+            {submitStatus && (
+              <div className="status-item">
+                <strong>Submitted:</strong> {submitStatus.submittedAt}
+              </div>
+            )}
+          </div>
           <div className="tabs">
             <button className={tab === "replay" ? "active" : ""} onClick={() => setTab("replay")}>Replay</button>
             <button className={tab === "logs" ? "active" : ""} onClick={() => setTab("logs")}>Logs</button>

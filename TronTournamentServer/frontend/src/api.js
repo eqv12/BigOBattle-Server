@@ -78,3 +78,7 @@ export async function testBot(roomCode, tier, formData) {
   }
   return data;
 }
+
+export async function getTestJobStatus(roomCode, jobId) {
+  return jsonRequest(`/api/rooms/${encodeURIComponent(roomCode)}/test-jobs/${encodeURIComponent(jobId)}`);
+}

@@ -18,6 +18,24 @@ MAX_TURNS = 500
 # --- Matchmaker Configuration ---
 # Set to the number of CPU cores to use for running matches.
 WORKER_PROCESSES = 4
+RANKED_WORKER_PROCESSES = 3
+TEST_WORKER_PROCESSES = 1
+
+# --- Queue / Redis Configuration ---
+REDIS_URL = "redis://127.0.0.1:6379/0"
+REDIS_QUEUE_RANKED = "emergent:queue:ranked"
+REDIS_QUEUE_TEST = "emergent:queue:test"
+REDIS_TEST_JOB_KEY_PREFIX = "emergent:test-job:"
+REDIS_TEST_JOB_TTL_SECONDS = 3600
+
+# --- Room Scheduler Configuration ---
+ROOM_SCHEDULER_ENABLED = True
+ROOM_SCHEDULER_TICK_SECONDS = 5
+ROOM_SCHEDULER_LOCK_TTL_SECONDS = 45
+ROOM_RD_STABLE_THRESHOLD = 100.0
+ROOM_INFO_GAIN_MIN = 0.0
+ROOM_MAX_REMATCHES_CALIBRATION = 5
+ROOM_MAX_REMATCHES_STABLE = 5
 
 # --- Engine Configuration ---
 MOVE_TIMEOUT_S = 0.5

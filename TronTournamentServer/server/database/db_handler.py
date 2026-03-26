@@ -383,6 +383,7 @@ def ensure_room_schema():
             display_name TEXT NOT NULL,
             password_hash TEXT,
             active_bot_path TEXT,
+            submission_version INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL,
             last_submission_at DATETIME,
             FOREIGN KEY(room_id) REFERENCES rooms(id),
@@ -417,6 +418,8 @@ def ensure_room_schema():
             game_key TEXT NOT NULL,
             participant_a_id INTEGER NOT NULL,
             participant_b_id INTEGER NOT NULL,
+            participant_a_submission_version INTEGER,
+            participant_b_submission_version INTEGER,
             winner_participant_id INTEGER,
             replay_data TEXT,
             termination_reason TEXT,
@@ -428,6 +431,17 @@ def ensure_room_schema():
         )
         """
     )
+
+    # Backward-compatible schema upgrades.
+    participant_cols = [row['name'] for row in cur.execute("PRAGMA table_info(participants)").fetchall()]
+    if 'submission_version' not in participant_cols:
+        cur.execute("ALTER TABLE participants ADD COLUMN submission_version INTEGER NOT NULL DEFAULT 0")
+
+    room_match_cols = [row['name'] for row in cur.execute("PRAGMA table_info(room_matches)").fetchall()]
+    if 'participant_a_submission_version' not in room_match_cols:
+        cur.execute("ALTER TABLE room_matches ADD COLUMN participant_a_submission_version INTEGER")
+    if 'participant_b_submission_version' not in room_match_cols:
+        cur.execute("ALTER TABLE room_matches ADD COLUMN participant_b_submission_version INTEGER")
 
     conn.commit()
     conn.close()
@@ -474,6 +488,87 @@ def get_room_by_code(room_code):
     room = conn.execute('SELECT * FROM rooms WHERE room_code = ?', (room_code,)).fetchone()
     conn.close()
     return dict(room) if room else None
+
+
+def get_open_rooms():
+    ensure_room_schema()
+    conn = get_db_connection()
+    rows = conn.execute(
+        '''
+        SELECT id, room_code, game_key, status, created_at
+        FROM rooms
+        WHERE status = 'open'
+        ORDER BY created_at ASC
+        '''
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_room_matchmaking_stats(room_id):
+    """Returns lightweight matchmaking counters for scheduler tick logs."""
+    ensure_room_schema()
+    conn = get_db_connection()
+    row = conn.execute(
+        '''
+        SELECT
+            COUNT(*) AS matchable_participants,
+            SUM(CASE WHEN rr.matches_played < ? THEN 1 ELSE 0 END) AS calibrating_participants,
+            SUM(CASE WHEN rr.matches_played >= ? THEN 1 ELSE 0 END) AS calibrated_participants
+        FROM participants p
+        JOIN room_ratings rr ON rr.participant_id = p.id AND rr.room_id = p.room_id
+        WHERE p.room_id = ?
+          AND p.active_bot_path IS NOT NULL
+          AND p.active_bot_path != ''
+        ''',
+        (config.CALIBRATION_MATCHES, config.CALIBRATION_MATCHES, room_id)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return {
+            'matchable_participants': 0,
+            'calibrating_participants': 0,
+            'calibrated_participants': 0,
+        }
+
+    return {
+        'matchable_participants': int(row['matchable_participants'] or 0),
+        'calibrating_participants': int(row['calibrating_participants'] or 0),
+        'calibrated_participants': int(row['calibrated_participants'] or 0),
+    }
+
+
+def get_room_convergence_stats(room_id):
+    """Returns aggregate values to decide whether room matchmaking can pause."""
+    ensure_room_schema()
+    conn = get_db_connection()
+    row = conn.execute(
+        '''
+        SELECT
+            COUNT(*) AS matchable_participants,
+            SUM(CASE WHEN rr.rd > ? THEN 1 ELSE 0 END) AS calibrating_participants,
+            MAX(rr.rd) AS max_rd
+        FROM participants p
+        JOIN room_ratings rr ON rr.participant_id = p.id AND rr.room_id = p.room_id
+        WHERE p.room_id = ?
+          AND p.active_bot_path IS NOT NULL
+          AND p.active_bot_path != ''
+        ''',
+        (float(getattr(config, 'ROOM_RD_STABLE_THRESHOLD', 80.0)), room_id)
+    ).fetchone()
+    conn.close()
+
+    matchable = int((row['matchable_participants'] if row else 0) or 0)
+    calibrating = int((row['calibrating_participants'] if row else 0) or 0)
+    max_rd = float((row['max_rd'] if row else config.DEFAULT_RD) or config.DEFAULT_RD)
+    rd_threshold = float(getattr(config, 'ROOM_RD_STABLE_THRESHOLD', 80.0))
+
+    return {
+        'matchable_participants': matchable,
+        'calibrating_participants': calibrating,
+        'max_rd': max_rd,
+        'is_converged': (matchable >= 2 and calibrating == 0 and max_rd <= rd_threshold),
+    }
 
 
 def get_or_create_participant(room_id, display_name):
@@ -550,12 +645,46 @@ def set_or_verify_participant_password(participant_id, submitted_password):
 
 
 def update_participant_bot_path(participant_id, bot_path):
+    ensure_room_schema()
     conn = get_db_connection()
     now = datetime.datetime.now()
+
+    participant = conn.execute(
+        'SELECT room_id FROM participants WHERE id = ?',
+        (participant_id,)
+    ).fetchone()
+    if not participant:
+        conn.close()
+        return
+
     conn.execute(
-        'UPDATE participants SET active_bot_path = ?, last_submission_at = ? WHERE id = ?',
+        '''
+        UPDATE participants
+        SET active_bot_path = ?, last_submission_at = ?, submission_version = submission_version + 1
+        WHERE id = ?
+        ''',
         (bot_path, now, participant_id)
     )
+
+    if config.reset_full:
+        conn.execute(
+            '''
+            UPDATE room_ratings
+            SET rating = 1500.0, rd = ?, vol = 0.06, matches_played = 0, last_played_at = NULL
+            WHERE room_id = ? AND participant_id = ?
+            ''',
+            (config.DEFAULT_RD, participant['room_id'], participant_id)
+        )
+    else:
+        conn.execute(
+            '''
+            UPDATE room_ratings
+            SET rd = ?, matches_played = 0, last_played_at = NULL
+            WHERE room_id = ? AND participant_id = ?
+            ''',
+            (config.DEFAULT_RD, participant['room_id'], participant_id)
+        )
+
     conn.commit()
     conn.close()
 
@@ -677,17 +806,61 @@ def create_room_match(room_id, game_key, participant_a_id, participant_b_id):
     conn = get_db_connection()
     cur = conn.cursor()
     played_at = datetime.datetime.now()
+    pa = conn.execute(
+        'SELECT submission_version FROM participants WHERE id = ? AND room_id = ?',
+        (participant_a_id, room_id)
+    ).fetchone()
+    pb = conn.execute(
+        'SELECT submission_version FROM participants WHERE id = ? AND room_id = ?',
+        (participant_b_id, room_id)
+    ).fetchone()
+    pa_version = int(pa['submission_version']) if pa else None
+    pb_version = int(pb['submission_version']) if pb else None
+
     cur.execute(
         '''
-        INSERT INTO room_matches (room_id, game_key, participant_a_id, participant_b_id, played_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO room_matches (
+            room_id, game_key, participant_a_id, participant_b_id,
+            participant_a_submission_version, participant_b_submission_version, played_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ''',
-        (room_id, game_key, participant_a_id, participant_b_id, played_at)
+        (room_id, game_key, participant_a_id, participant_b_id, pa_version, pb_version, played_at)
     )
     match_id = cur.lastrowid
     conn.commit()
     conn.close()
     return match_id
+
+
+def count_room_bot_pair_matches(room_id, participant_a_id, participant_a_version, participant_b_id, participant_b_version):
+    """Count completed matches for an exact bot-version pair (order-independent)."""
+    ensure_room_schema()
+    conn = get_db_connection()
+    count = conn.execute(
+        '''
+        SELECT COUNT(*) FROM room_matches
+        WHERE room_id = ?
+          AND (
+            (
+              participant_a_id = ? AND participant_a_submission_version = ?
+              AND participant_b_id = ? AND participant_b_submission_version = ?
+            )
+            OR
+            (
+              participant_a_id = ? AND participant_a_submission_version = ?
+              AND participant_b_id = ? AND participant_b_submission_version = ?
+            )
+          )
+        ''',
+        (
+            room_id,
+            participant_a_id, participant_a_version, participant_b_id, participant_b_version,
+            participant_b_id, participant_b_version, participant_a_id, participant_a_version,
+        )
+    ).fetchone()[0]
+    conn.close()
+    return int(count or 0)
 
 
 def update_room_match_result(match_id, winner_participant_id, replay_data, termination_reason):
@@ -743,6 +916,7 @@ def get_matchable_room_participants(room_id):
             p.display_name,
             p.active_bot_path,
             p.last_submission_at,
+            p.submission_version,
             rr.rating,
             rr.rd,
             rr.matches_played,

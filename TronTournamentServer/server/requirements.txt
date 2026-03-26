@@ -1,3 +1,4 @@
 Flask
 glicko2
+redis
 server

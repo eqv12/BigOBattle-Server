@@ -4,10 +4,7 @@ import datetime
 import os
 import shutil
 import zipfile
-import uuid
-import json
 from server.logic import matchmaker
-from server.logic import engine
 from flask import Flask, request, jsonify, render_template # type: ignore
 
 
@@ -21,6 +18,7 @@ from server.games.catalog import get_game, list_games
 app = Flask(__name__)
 db_handler.ensure_room_schema()
 _match_queue = None
+_room_matchmaking_tick = 0
 
 
 def _ensure_match_queue():
@@ -68,17 +66,9 @@ def _parse_db_datetime(value):
 
 
 def _pick_room_pair(room_id):
-    participants = db_handler.get_matchable_room_participants(room_id)
-    if len(participants) < 2:
-        return None
-
-    for i, p0 in enumerate(participants):
-        for p1 in participants[i + 1:]:
-            if not db_handler.have_room_participants_played_since_submission(room_id, p0['id'], p1['id']):
-                return p0, p1
-
-    # Fallback: if everyone has played recently, just pick top two by current ordering
-    return participants[0], participants[1]
+    global _room_matchmaking_tick
+    _room_matchmaking_tick += 1
+    return matchmaker.pick_room_pair(room_id, _room_matchmaking_tick, use_info=True)
 
 # --- Web Routes (API Endpoints) ---
 
@@ -181,11 +171,23 @@ def submit_room_bot(room_code):
         return jsonify({'error': "Missing required file 'run.sh' in submitted ZIP"}), 400
 
     db_handler.update_participant_bot_path(participant['id'], run_script_path)
+
+    # Ensure workers/scheduler are running and nudge one immediate scheduling pass.
+    _ensure_match_queue()
+    nudge_result = matchmaker.schedule_room_once(
+        room_id=room['id'],
+        room_code=room['room_code'],
+        game_key=room['game_key'],
+        tick_counter=1,
+        reason='submit',
+    )
+
     return jsonify({
         'message': f'Bot for {display_name} uploaded successfully',
         'room_code': room_code,
         'display_name': display_name,
         'password_initialized': is_first_set,
+        'ranked_queue_nudge': nudge_result,
     }), 200
 
 
@@ -256,8 +258,8 @@ def test_room_bot(room_code):
     tier = str(request.form.get('tier', 'tier1')).strip().lower()
     file = request.files['bot_zip_file']
 
-    test_id = str(uuid.uuid4())
-    test_dir = os.path.join(config.ROOM_BOTS_DIR, 'test', room_code, test_id)
+    test_id = os.urandom(8).hex()
+    test_dir = os.path.join(config.ROOM_BOTS_DIR, 'test_jobs', test_id)
     os.makedirs(test_dir, exist_ok=True)
 
     try:
@@ -265,6 +267,7 @@ def test_room_bot(room_code):
         user_bot_path = os.path.join(test_dir, 'run.sh').replace('\\', '/')
 
         if not os.path.exists(user_bot_path):
+            shutil.rmtree(test_dir, ignore_errors=True)
             return jsonify({'error': "Missing required file 'run.sh' in submitted ZIP"}), 400
 
         benchmark_path = os.path.join(
@@ -272,21 +275,49 @@ def test_room_bot(room_code):
         ).replace('\\', '/')
 
         if not os.path.exists(benchmark_path):
+            shutil.rmtree(test_dir, ignore_errors=True)
             return jsonify({'error': f'Benchmark bot not found for {room["game_key"]}:{tier}'}), 400
 
-        match_result = engine.run_match(user_bot_path, benchmark_path)
-        replay = json.loads(match_result['replay'])
+        queue = _ensure_match_queue()
+        job_id = queue.enqueue_test({
+            'job_id': test_id,
+            'queue_type': 'test',
+            'room_code': room_code,
+            'room_id': room['id'],
+            'game_key': room['game_key'],
+            'tier': tier,
+            'test_dir': test_dir,
+            'user_bot_path': user_bot_path,
+            'benchmark_path': benchmark_path,
+        })
 
         return jsonify({
-            'status': 'success',
-            'winner': match_result['winner'],
-            'termination': match_result['termination_reason'],
-            'replay': replay,
-            'raw_output': replay.get('result', {}).get('bot_raw_outputs', {}),
-        }), 200
-    finally:
-        if os.path.exists(test_dir):
-            shutil.rmtree(test_dir)
+            'status': 'queued',
+            'job_id': job_id,
+            'room_code': room_code,
+            'game_key': room['game_key'],
+            'tier': tier,
+            'status_url': f'/api/rooms/{room_code}/test-jobs/{job_id}',
+        }), 202
+    except zipfile.BadZipFile:
+        shutil.rmtree(test_dir, ignore_errors=True)
+        return jsonify({'error': 'Invalid file format. Please upload a ZIP file.'}), 400
+
+
+@app.route('/api/rooms/<room_code>/test-jobs/<job_id>', methods=['GET'])
+def get_test_job_status(room_code, job_id):
+    room = db_handler.get_room_by_code(room_code)
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+
+    payload = matchmaker.get_test_job(job_id)
+    if not payload:
+        return jsonify({'error': 'Job not found'}), 404
+
+    if payload.get('room_code') != room_code:
+        return jsonify({'error': 'Job not found in this room'}), 404
+
+    return jsonify(payload), 200
 
 
 @app.route('/api/rooms/<room_code>/queue-match', methods=['POST'])
@@ -315,13 +346,15 @@ def queue_room_match(room_code):
         return jsonify({'error': 'Both participants must have submitted bots before queueing a match'}), 400
 
     queue = _ensure_match_queue()
-    queue.put({
+    queue.enqueue_ranked({
         'queue_type': 'room',
         'room_id': room['id'],
         'room_code': room_code,
         'game_key': room['game_key'],
         'participant_a_id': int(participant_a_id),
         'participant_b_id': int(participant_b_id),
+        'participant_a_submission_version': int(p0.get('submission_version', 0)),
+        'participant_b_submission_version': int(p1.get('submission_version', 0)),
         'is_ranked': True,
     })
 
