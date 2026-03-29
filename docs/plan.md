@@ -1,6 +1,6 @@
 # EMERGENT Build Plan (Living Document)
 
-Last updated: 2026-03-21
+Last updated: 2026-03-22
 
 ## Goal
 Build a stable, room-first, multi-game-capable LAN coding game platform where users submit bots and compete on room-scoped leaderboards.
@@ -98,7 +98,7 @@ Build a stable, room-first, multi-game-capable LAN coding game platform where us
 
 ---
 
-## API Plan (MVP)
+## Final API Architecture
 1. `POST /api/rooms`
    - input: `{ game_key }`
    - output: `{ room_code, admin_password }`
@@ -149,6 +149,14 @@ Build a stable, room-first, multi-game-capable LAN coding game platform where us
 - [x] Worker consumes room jobs and runs selected game plugin.
 - [x] Persist replay + result to room_matches.
 - [x] Update Glicko-2 in room_ratings only.
+- [x] Move queue transport to Redis with dedicated ranked/test worker pools.
+- [x] Add async test job queue + test job status endpoint.
+- [x] Add max-information-gain room pair selection with calibration/general tick policy.
+- [x] Add live room scheduler ticks with per-tick enqueue logs.
+- [x] Add submit-path matchmaking nudge to auto-start ranked background matching.
+- [x] Add bot-version rematch tracking and configurable rematch caps.
+- [x] Add room convergence stop gate based on calibration completion + RD threshold.
+- [x] Add submit scheduler smoke script with random/greedy/space-filler bots.
 
 ## Phase 4 — UI Overhaul
 - [x] Create React app shell for frontend.
@@ -178,10 +186,17 @@ Build a stable, room-first, multi-game-capable LAN coding game platform where us
 - Added Tier 1 benchmark bot (`tron/benchmarks/tier1`) and verified submit+test flow end-to-end.
 
 ## Phase 5 — Stabilization
-- [ ] Determinism checks per game plugin with fixed seed.
-- [ ] Replay schema versioning (`schema_version`, `game_key`, room metadata).
-- [ ] Parseable error envelope for timeout/OOM/runtime/syntax failures.
-- [ ] Negative tests: bad zip, missing run.sh, invalid move, timeout.
+- [ ] Determinism checks per game plugin with fixed seed (SKIPPED).
+- [ ] Replay schema versioning (`schema_version`, `game_key`, room metadata) (SKIPPED).
+- [x] Parseable error envelope for timeout/OOM/runtime/syntax failures.
+- [x] Add multiple language UI support in frontend (e.g. Java, C++).
+- [ ] Investigate/Handle JVM 'first-move' latency robustly (currently using temporary 3.0s `FIRST_MOVE_TIMEOUT_S` extension).
+- [ ] Negative tests: bad zip, missing run.sh, invalid move, timeout (DEFERRED).
+
+## Quality of Life / Edge Cases (Backlog)
+- [ ] **Fix non-terminating string IO bug:** If a bot outputs an unformatted string without a newline or proper JSON (e.g., `"PU"`), the thread hangs waiting for EOF/newline, causing a generic Timeout instead of a parsing error.
+- [ ] **Fix blocked stdout during crash:** If a bot crashes and writes to `stderr`, the engine occasionally still logs a Timeout because it is indefinitely blocked on `stdout.readline()` before checking process exit codes. Handlers need async checking or `select()`.
+- [ ] **Log turn execution time:** Record the exact time (in ms) each bot took to produce its move, and display this "time per move" in the replay logs and frontend visualizer.
 
 ## Phase 3 Verification Checklist (run immediately after queue/rating wiring)
 - [ ] Create room through `POST /api/rooms` and store room credentials.
@@ -236,6 +251,8 @@ Build a stable, room-first, multi-game-capable LAN coding game platform where us
 4. `GET /api/rooms/{room_code}/leaderboard`
 5. `GET /api/rooms/{room_code}/matches/recent`
 6. `POST /api/rooms/{room_code}/queue-match`
+7. `POST /api/rooms/{room_code}/test` (async, returns `job_id`)
+8. `GET /api/rooms/{room_code}/test-jobs/{job_id}`
 
 ### Immediate next work
 - Run full end-to-end verification on new replay/raw-output/test endpoints.

@@ -17,7 +17,7 @@ These CPU bots act as the baseline opponents for "Test" runs.
 
 ## Current Scope Decision: Room-Only Ratings
 - Ratings are maintained per room leaderboard only.
-- No global cross-room rating aggregation in current MVP.
+- No global cross-room rating aggregation; ratings strictly reflect isolated room contexts.
 - A participant can have independent ratings in different rooms.
 
 ## Practical Implementation Notes

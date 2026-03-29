@@ -38,7 +38,7 @@ ROOM_MAX_REMATCHES_CALIBRATION = 5
 ROOM_MAX_REMATCHES_STABLE = 5
 
 # --- Engine Configuration ---
-MOVE_TIMEOUT_S = 0.5
+MOVE_TIMEOUT_S = 3.0
 MEMORY_LIMIT_MB = 256
 DATABASE_FILE = "server/database/tournament.db"
 BOTS_DIR ="bots_official"

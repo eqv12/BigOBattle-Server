@@ -25,10 +25,11 @@ The backend architecture (single-server LAN deployment) as much concurrent match
 5. **Referee Execution:** workers run matches only within the room and selected game.
 6. **Room Leaderboard Update:** rating updates are written only to that room context.
 
-## Matchmaking Policy (Pragmatic for MVP)
-- Keep matchmaking simple and stable, not production-grade strict.
-- Constraints:
-	- no self-play
-	- avoid immediate repeat pairings when practical
-	- one active match job per participant at a time
-	- prioritize participants with high RD / low recent activity
+## Matchmaking Policy (Glicko-2 & Expanding Windows)
+- The server employs a background scheduler running parallel worker processes (via `multiprocessing` connected to Redis).
+- Matchmaking is driven by Glicko-2 mathematics: it seeks the pair that maximizes `Info Gain` (i.e. uncertainty/volatility reduction).
+- **Expanding Rating Windows:** Instead of rigid tiers, the system uses expanding windows (`[200, 400, 600, 800, None]`) around a bot's rating to find valid opponents. This dynamically resolves starvation.
+- **Constraints:**
+        - Maximum 5 rematches per particular bot-version pairing.
+        - Room Convergence stops enqueuing rated matches for a player when their Rating Deviation (RD) drops below 100.
+        - No self-play.

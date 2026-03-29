@@ -5,6 +5,7 @@ EMERGENT is a single-developer college project: a single-server LAN coding game 
 ## Core Directives
 1. Keep it simple but functional. Prefer pragmatic single-server solutions over cloud-style complexity.
 2. Keep game logic modular. New games must be addable without rewriting orchestration.
+3. Prioritize not using the command line to make changes to code instead use your editor and the UI. The command line should only be used for git, running the server, and running tests.
 
 
 ## Where Detailed Instructions Live

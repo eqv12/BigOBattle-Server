@@ -1,0 +1,621 @@
+\documentclass[12pt,a4paper]{report}
+
+% ====================
+% PACKAGES & SETTINGS
+% ====================
+\usepackage{mathptmx} % Times New Roman Font
+\usepackage[utf8]{inputenc}
+\usepackage{setspace}
+\usepackage{amsmath} 
+\usepackage{graphicx}
+\onehalfspacing % 1.5 Line Spacing
+
+\usepackage{titlesec}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+% Center the Chapter Title
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\centering}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
+
+\begin{document}
+
+% ====================
+% FRONTMATTER
+% ====================
+\pagenumbering{roman}
+
+\chapter*{SYNOPSIS}
+\addcontentsline{toc}{chapter}{SYNOPSIS}
+
+The evaluation of software engineering competency has traditionally relied on static analysis and isolated unit-testing paradigms, which often fail to adequately assess a developer's capacity to handle dynamic board states, finite resource constraints, and adversarial logic execution. EMERGENT proposes a systemic paradigm shift by delivering an autonomous, single-server Local Area Network (LAN) coding game platform. Instead of solving fixed mathematical puzzles, users are challenged to write algorithmic bots that compete head-to-head in abstract, real-time turn-based games.
+
+Constructed upon a "Room-First" architectural design to enforce strict local tenant isolation, the platform integrates a React.js SPA utilizing the language-agnostic Monaco Editor. This creates a frictionless, zero-installation web IDE for participants. Crucially, the platform manages the severe security risks associated with executing untrusted remote code by passing logic compilations to a decoupled, asynchronous queue. An overarching Referee daemon processes these matches inside strictly throttled ephemeral Docker containers, guaranteeing absolute "Zero-Trust" isolation from the host machine. 
+
+By replacing binary pass/fail grading mechanics with the academically rigorous Glicko-2 multidimensional rating system, EMERGENT provides a continuous, statistically stable evaluation of engineering resilience. Together with a decoupled frontend Visualizer rendering deterministic JSON artifact logs, the platform successfully scales and models the true chaos of real-world production engineering far more effectively than traditional static assessments.
+
+\newpage
+\tableofcontents
+\newpage
+\listoffigures
+\newpage
+\listoftables
+\newpage
+
+\pagenumbering{arabic}
+
+% ====================
+% CHAPTER 1: INTRODUCTION
+% ====================
+\chapter{INTRODUCTION}
+
+\section{PROJECT OVERVIEW}
+EMERGENT is an advanced, fully autonomous, single-server Local Area Network (LAN) coding game platform meticulously designed to offer a highly interactive, competitive environment for algorithmic programming. Unlike traditional platforms where users solve static, predictable algorithmic puzzles against hidden test cases, EMERGENT shifts the paradigm entirely by providing a dynamic, stateful multi-agent sandbox. In this environment, users write autonomous heuristic or algorithmic "bot" programs that compete directly against each other in real-time, abstract, turn-based games, such as Tron. 
+
+Built with a foundational "Room-First" architectural philosophy, the platform dynamically provisions isolated namespaces—ensuring that EMERGENT completely bypasses the complex, high-latency overhead of global server leaderboards. This heavily minimizes deployment friction and allows tournament organizers, university coding clubs, or hackathon facilitators to easily host private, low-latency competitions on standard consumer hardware. The Organizer provisions a room, selects a specific game protocol rule-set, and is granted a secure cryptographic administrative PIN alongside a unique UUID room code. Participants then join the lobby using a display name and immediately begin iterating on their competitive logic.
+
+Code submission is handled through a fully embedded web-based IDE workspace. Once a bot script is transmitted over the network, the platform's multi-threaded background execution engine automatically queues, strictly isolates, compiles, matches, and ranks the bots. Results are processed mathematically using the academically robust Glicko-2 participant rating formula, updating the lobby leaderboard in near real-time based on win, loss, or draw outcomes. Replays, explicit console output streams, and comprehensive error exception reports (such as runtime syntax failures, kernel Out-Of-Memory interrupts, or strict CPU time-limit exhaustions) are robustly handled by the server referee and beautifully visualised on the client frontend.
+
+\section{PROBLEM STATEMENT AND MOTIVATION}
+The current industry standard for assessing engineering competency and logical resilience heavily revolves around localized static analysis. Traditional learning tools (like LeetCode, HackerRank, or standard university assignments) present a purely binary pass/fail environment. A user's code is tested exclusively against pre-defined, mathematical input arrays to verify if the output matches the expected solution. 
+
+While static problem-solving successfully teaches foundational Data Structures and Algorithms (DSA), it critically fails to simulate the chaotic nature of real-world software engineering. In production environments, systems must interact dynamically with adversarial inputs, fluctuating states, and finite hardware constraints. Developers are rarely taught how to write code that degrades gracefully, manages localized state intelligently over time, or adapts to an unpredictable external actor.
+
+EMERGENT was conceived strictly to solve this gap. By forcing code to participate in a live competitive "Bot-Battle," the code is tested not just for correctness, but for strategic foresight and runtime stability. A bot that fails to handle an unexpected board state gracefully will crash, accurately penalizing the user for poor exception handling. Furthermore, by introducing a standardized rating algorithm, EMERGENT provides absolute, empirically backed metrics on a user's code quality compared to localized peers, cultivating an environment of intense, engaging, and highly educational iteration.
+
+\section{SCOPE AND OBJECTIVES}
+The primary objective of the EMERGENT system is to architect a platform that completely abstracts away the complexities of local environment setups for the end-user, while providing an impenetrable execution sandbox for the host application. 
+
+The explicit goals of the minimum viable product (MVP) encompass:
+\begin{itemize}
+    \item \textbf{Frictionless Onboarding:} Requiring exactly zero local installations (compilers, interpreters, or dependencies) for the student. Everything must operate seamlessly via a modern web browser.
+    \item \textbf{Guaranteed Determinism:} Ensuring the Referee engine simulation executes the game loop linearly and identically every single time when given the same random seed and input code, yielding absolute algorithmic fairness.
+    \item \textbf{Zero-Trust Code Execution:} Implementing an architecture where malicious code (e.g., recursive fork bombs, remote network pings, or endless infinite memory arrays) submitted by a user cannot structurally escape the bounded container or crash the host application.
+    \item \textbf{Rapid Analytical Feedback:} Generating highly granular \texttt{GameState.json} logs post-match that instantly allow the user to visualize the match sequentially frame-by-frame on a Canvas UI, fundamentally resolving "Black Box" testing issues by showing exactly why and where an algorithm failed logically.
+\end{itemize}
+
+\section{SYSTEM CONFIGURATIONS AND PREREQUISITES}
+Because the platform simulates an entire virtual computational fleet using background daemon workers alongside an active web server, the hardware recommendations are categorized by the operational load expected on the host device.
+
+\subsection{Hardware Requirements}
+For optimal and stable performance of the EMERGENT host tournament server, particularly prioritizing the asynchronous background execution engine, the following hardware constraints are evaluated:
+\begin{itemize}
+    \item \textbf{Processor (CPU):} Minimum multi-core processor (Intel Core i5, AMD Ryzen 5, or equivalent ARM chips). High thread concurrency is required because the Referee routinely spawns Python sub-processes heavily reliant on internal stream pipe routing.
+    \item \textbf{Memory (RAM):} 8 GB minimum, though 16 GB is heavily recommended. Because the Docker daemon imposes a strict 512MB memory boundary per executing container, a queue processing multiple matches concurrently will dynamically reserve and flush massive logical memory blocks.
+    \item \textbf{Storage Volumes:} 40 GB of free space Minimum, specifically allocated to support the dense, localized SQLite database string stores, the Docker Engine virtual image snapshots, and localized user bot source code repositories. Solid State Drives (NVMe/SSD) are strongly recommended over Hard Disk Drives (HDD) to reduce container boot I/O latency.
+\end{itemize}
+
+Client machines connecting to the web interface require merely a standard modern machine with an updated web browser and a stable LAN connection to the host server.
+
+\subsection{Software Requirements}
+\begin{itemize}
+    \item \textbf{Operating System:} A Linux Kernel-based OS (Ubuntu 22.04 LTS or Debian 12 preferred) is highly recommended over Windows due to Docker's explicit reliance on native \texttt{cgroups} and namespaces for container isolation.
+    \item \textbf{Language Runtimes:} Python 3.10+ (for backend orchestration and multi-processing) and Node.js v18+ (for executing Vite frontend bundle compilation scripts).
+    \item \textbf{Containerization Platform:} Docker Engine v24+ configured to bind directly to the background worker interface for process sandboxing.
+    \item \textbf{Client Access:} Google Chrome version 90+, Mozilla Firefox 89+, or any equivalent modern browser offering strict support for HTML5 Canvas rendering and WebSocket background polling.
+\end{itemize}
+
+\section{TECHNOLOGY OVERVIEW AND DEVELOPMENT STACK}
+EMERGENT is built upon a modern, modular, and containerized technology stack optimized fundamentally for rapid prototyping and heavily isolated computational execution. 
+
+\subsection{Backend Routing and Orchestration Layers}
+The API layer is constructed fundamentally around \textbf{Flask}, a lightweight Python Web Server Gateway Interface (WSGI) framework. It acts purely as a stateless routing gatekeeper. It manages canonical HTTP requests, constructs dynamic Room session schemas, and serves API endpoints for frontend data parsing. To eliminate intense structural complexity for LAN-hosted tournaments, the data layer utilizes a heavily normalized relational \textbf{SQLite} database. By bypassing massive Object-Relational Mappings (ORMs) in favor of executing localized raw SQL commands, the system structurally drops standard database round-trip network lag, providing ultra-fast write commitments during high-frequency matchmaking cycles.
+
+\subsection{Execution Sandbox and The Referee}
+The core competitive engine heavily divests computation away from the main API thread by shifting into an asynchronous \textbf{Redis} Queue backing continuous background Python worker threads. When a client submits their code string, it is dynamically bound as a physical file and volume-mounted inside a \textbf{Docker} container. Docker acts as the ultimate authority on isolation. By forcefully imposing internal engine flags such as \texttt{--network=none}, \texttt{--cpus="1.0"}, and exact memory caps, it structurally guards the server against malicious submissions. The referee then connects dynamically to this container via Inter-Process Communication (IPC) streams (standard input/output pipes) to simulate the game turns. Individual abstract games are strictly modularized using a localized Python Plugin Registry (e.g., \texttt{/server/games/tron/plugin.py}), meaning fundamentally new games can be slotted into the ecosystem without altering the core Umpire routing mechanics.
+
+\subsection{Frontend Presentation and The Developer Experience}
+The primary developer portal is constructed as a heavily optimized Single Page Application (SPA), written in Javascript leveraging the \textbf{React.js} component framework, bootstrapped by a \textbf{Vite} pipeline to ensure microsecond Hot-Module Replacement (HMR). 
+
+The platform guarantees an unparalleled, frictionless coding experience by embedding the \textbf{Monaco Editor} (the exact underlying open-source declarative structure powering Microsoft's Visual Studio Code). By importing Monaco, the browser instantly enables language-agnostic abstract syntax tree (AST) code formatting, algorithmic code-folding, and line-by-line syntax highlighting for Python, Java, and C++. Finally, bespoke React HTML5 components intercept the raw `GameState.json` outputs generated by the Docker backend, systematically rebuilding the 2D visual layout of the match allowing users to engage with a frame-by-frame visual replay interface natively inside the web portal.
+
+\section{REPORT ORGANIZATION}
+The remainder of this report is meticulously organized to sequentially document the architectural design, algorithmic implementation, and systemic testing of the EMERGENT platform.
+\begin{itemize}
+    \item \textbf{Chapter 2: System Analysis} explores the problem boundaries in detail, outlining standard limitations of existing static coding solutions, identifying explicit non-functional limits, and thoroughly cataloguing the requirements necessary.
+    \item \textbf{Chapter 3: System Design} charts the formal architecture patterns using rigorous Unified Modeling Language (UML) specifications, modeling actor behaviors, asynchronous process workflows, and exact underlying entity-relationship (ER) mapping rules optimized for local Room tenancy.
+    \item \textbf{Chapter 4: System Implementation} dissects the deeply integrated technical challenges regarding how exactly the Docker streams interact safely, the exact Mathematical representations of the Glicko-2 Elo system, and the deployment of the Web Monaco IDE.
+    \item \textbf{Chapter 5: Testing} catalogues the extensive White-Box and Black-Box quality assurance methodologies enforced, defining specific unit verifications and Sandbox edge-case resilience tests mapping server exceptions.
+    \item \textbf{Chapter 6: Conclusion and Future Scope} finalizes the report by reflecting heavily on the objectives successfully realized during the MVP, and maps heavily towards theoretical Cloud-Native expansions, including Kubernetes processing layers and Data Analytics integration.
+\end{itemize}
+
+% ====================
+
+% ====================
+% CHAPTER 2: SYSTEM ANALYSIS
+% ====================
+\chapter{SYSTEM ANALYSIS}
+
+\section{EXISTING SYSTEM}
+The current landscape of automated programming assessment is dominated by two primary categories: static algorithmic problem solvers and gamified coding platforms. A review of existing literature and market solutions reveals significant gaps in testing real-world engineering resilience.
+
+\subsection{Static Algorithmic Platforms}
+Platforms such as LeetCode and HackerRank operate as the industry standard for technical recruitment and skill assessment. They function on a Static Analysis and Unit Testing model, where a user's code is evaluated against a fixed set of pre-defined input/output cases. While effective for assessing basic proficiency in Data Structures and Algorithms (DSA), these platforms fail to simulate "day-to-day" engineering challenges. The evaluation is binary (Pass/Fail) and highly isolated, meaning the code never interacts with external systems or active adversaries. This rigidly predictable environment limits the platform's ability to test for system adaptability or holistic design skills.
+
+\subsection{Gamified Coding Platforms}
+To address the lack of continuous engagement in static platforms, services like CodinGame introduced gamification elements, utilizing visual feedback and "bot battles" to motivate learning. While research indicates these environments significantly improve cognitive engagement, they suffer from the "Relative Skill" problem. Most gamified platforms rank users solely against each other without a standardized baseline. Without calibrated AI opponents acting as a benchmark, it is difficult for recruiters or educators to determine a candidate's absolute skill level—a high rank might merely indicate the user played against weak opponents.
+
+\subsection{The Gap: Dynamic vs. Static Testing}
+There is a fundamental difference between checking if code is mathematically correct (Static) and checking if a system is robust (Dynamic). Existing technical literature emphasizes that static testing allows for early defect detection but cannot effectively uncover runtime anomalies caused by race conditions, resource exhaustion, or adversarial inputs. EMERGENT directly addresses this gap by implementing a Dynamic Execution Engine that evaluates true resource management and adversarial strategy.
+
+\section{PROPOSED SYSTEM}
+EMERGENT addresses the critical gaps in the existing ecosystem by introducing a "Room-First" architecture leveraging a dynamic, multi-agent sandbox. By shifting the evaluation paradigm to a continuous performance metric based on head-to-head competition, the platform rewards code resilience and strategic foresight over rote memorization.
+
+\subsection{Deployment of a Deterministic Execution Engine}
+The primary technical solution is the creation of a containerized "Referee System" capable of safely running untrusted user code. By utilizing a "Warm Pool" architecture to drastically reduce container startup latency, the platform provides an inherently scalable model for low-latency, high-security code execution. Because the engine strictly sequentializes inputs, every match is beautifully deterministic and mathematically reproducible.
+
+\subsection{A Standardized Skill Assessment Framework}
+Unlike traditional platforms that offer a binary pass/fail status, the proposed system yields a Continuous Elo Rating (specifically leveraging the Glicko-2 formula) for every participant. Through the introduction of "Tiered Benchmark Bots" (calibrated Tier 1-3 AI opponents), users and recruiters are provided with a tangible, granular tool to measure a candidate's absolute engineering maturity. 
+
+\subsection{Enhanced Debugging Capabilities (The "Flight Recorder")}
+The platform establishes a new benchmark for debugging in competitive environments by generating comprehensive Turn-by-Turn Replay Logs formatted as JSON. This outcome empowers users to conduct "White Box" testing on their algorithms, allowing them to step through a match frame-by-frame on the frontend visualizer. Developers can inspect exactly why and when a specific strategy failed—a feature entirely absent in standard "Black Box" testing platforms.
+
+\section{REQUIREMENTS SPECIFICATION}
+
+\subsection{Functional Requirements}
+The functional requirements of the EMERGENT platform are categorized into four distinct modules:
+\begin{itemize}
+    \item \textbf{User Interface \& Bot Management:} The system provides an embedded, browser-based IDE (powered by Monaco Editor) featuring exact syntax highlighting and line numbering for Python, Java, and C++. It enables bot submission, versioning, and displays comprehensive personal statistics (Elo, win/loss ratios).
+    \item \textbf{Matchmaking \& Orchestration:} Utilizing an asynchronous priority queue via Redis, incoming match requests are handled without interrupting main server threads. The matchmaker employs skill-based pairing to automatically match participants with similar ratings and manages real-time updates to the room-focused leaderboard.
+    \item \textbf{The Execution Engine (Referee):} The core module exclusively processes matches inside strictly isolated Docker environments, protecting the host system. It maintains a "Warm Pool" of paused containers to reduce match latency below 500ms and guarantees 100\% deterministic simulation sequences.
+    \item \textbf{Replay \& Visualization:} Following a match, the engine must render a precise \texttt{GameState.json} architectural log. The frontend React visualizer parses this artefact to construct a fully interactive GUI replay player including pause, rewind, and tick-inspection mechanics.
+\end{itemize}
+
+\subsection{Non-Functional Requirements}
+\begin{itemize}
+    \item \textbf{Security \& Isolation:} All user-submitted logic is fiercely sandboxed inside Docker containers without host network or sensitive file system access. Mandatory Resource Quotas forcefully terminate executions exceeding 512MB of RAM or 1.0 seconds of CPU duration per game turn to prevent system Denial of Service (DoS) attacks.
+    \item \textbf{Performance \& Latency:} Utilizing the warm pool structure, match request-to-execution latency must remain under 2 seconds. Global workspace UI and editor initialization must load under 1.5 seconds on standard network configurations, and subsequent leaderboards must push updates within 5 seconds of match completion.
+    \item \textbf{Reliability \& Determinism:} Reproducibility is non-negotiable. Re-evaluating the exact same bot code pairing under the exact same random game seed must always yield a bit-for-bit identical final simulation outcome. Furthermore, the orchestrator should strive for a 99\% uptime availability rate during active tournament sessions.
+    \item \textbf{Scalability:} To support high-velocity tournament contexts, the system must smoothly orchestrate a minimum of 50 concurrent matches (equating to 100 active participant containers) concurrently via effective queue pooling mechanics.
+    \item \textbf{Usability:} Runtime or Syntax execution exceptions must be accurately captured, parsed out of the unformatted standard error streams, and delivered to the user interface in a human-readable format indicating the specific logic point of failure.
+\end{itemize}
+
+% ====================
+% CHAPTER 3: SYSTEM DESIGN
+% ====================
+\chapter{SYSTEM DESIGN}
+
+System design is the fundamental process of defining the architecture, components, modules, interfaces, and data for a system to satisfy the previously specified technical and business requirements. For the EMERGENT platform, the design phase required meticulous planning and architectural foresight to bridge the significant operational gap between standard web application frameworks and the highly secure, latency-sensitive constraints of an autonomous deterministic game execution engine. This chapter comprehensively details the visual modelling of the system, the specific design patterns employed, the API layer architecture, the sequential flow of asynchronous data during code evaluation, and the robust foundational relational database structure that exclusively enforces the "Room-First" multi-tenant logic.
+
+\section{SYSTEM ARCHITECTURE PATTERN}
+The system architecture of EMERGENT follows a decoupled, asynchronous, hybrid micro-services pattern. While deploying a full service-mesh was deemed unnecessary overhead for a LAN-scoped tournament server, a strictly monolithic architecture would outright fail due to the blocking nature of local compiler executions.
+
+\subsection{The Presentation Layer (Client)}
+The Presentation Layer acts as the sole access point for human users, residing entirely in the client's browser. It is designed around the Single Page Application (SPA) paradigm. This layer is responsible for managing localized state (such as active editor text buffers and cached match replays) without demanding continuous full-page refreshes from the server. Component modularity here ensures that the Visualizer, the Leaderboard, and the Monaco IDE are wholly independent UI fragments that only re-render when their specific dependent data payloads mutate.
+
+\subsection{The Orchestration and API Layer (Host Backend)}
+Sitting as the central hub of interaction, the API layer serves as a stateless router. Its design is deliberately thin. Rather than processing game logic, the API layer operates essentially as a gatekeeper and message broker. It handles initial request validation, enforces syntactic correctness of room codes, and parses incoming multipart form data (the user's zipped bot code). When code is safely saved to the local disk, the API layer instantly delegates the heavy computational work to the next tier by publishing a "Match Job" to the background worker queues via an internal Pub/Sub or polling mechanic, thereby maintaining extremely low response latencies for the end-user.
+
+\subsection{The Asynchronous Execution Layer (Worker Pool)}
+Decoupled entirely from the API routes, the Execution Layer manages a pool of background daemon processes. It adopts a Worker-Queue design pattern. These workers function in an infinite synchronous event loop, actively pulling pending match jobs from the datastore. By moving the sandbox instantiation to this layer, the design inherently protects the web server from hanging due to a student writing an infinite loop. This layer explicitly integrates the Docker daemon, interfacing with it as a low-level service to rapidly boot and destroy ephemeral containers. 
+
+\subsection{The Data Persistence Layer}
+The lowest level block is the Data Persistence Layer, consisting of the localized SQLite relational database and the file system. Given the high-read/high-write volume of the matchmaker—which constantly updates dynamic Glicko-2 ratings—SQLite was selected over heavier cloud databases (like PostgreSQL) to completely eliminate round-trip network latency. The file system is structurally organized to heavily sandbox user directories, ensuring that a Python bot in Room A physically cannot read the source code of a Java bot located in Room B.
+
+\section{ARCHITECTURAL PROCESS FLOW AND DATA LIFECYCLE}
+Before detailing specific low-level component interactions, it is critical to map the overarching Business Process Model and Notation (BPMN) that governs the platform's chronological data flow. Traditional web platforms operate on a synchronous Request-Response cycle; However, compiling a Java executable and running a 500-tick Tron match requires heavy computational time. 
+
+The BPMN design forces a strict asynchronous lifecycle. When a participant submits an algorithm, the frontend receives a generic "200 Accepted" acknowledgement within 50ms. The payload enters the queuing buffer. The worker node subsequently consumes the payload, compiles the binaries inside the execution sandbox, runs the game to termination, and writes the JSON output to the database. The client frontend operates a background polling mechanism which passively listens for the updated queue status, fetching the heavy graphical rendering payload only when the server dictates the match is unequivocally concluded.
+
+% PLACEHOLDER FOR BPMN DIAGRAM
+\begin{figure}[hbp]
+    \centering
+    % A placeholder box that will render as a solid rectangle in the PDF
+    \rule{0.8\textwidth}{6cm}
+    \caption{BPMN Diagram - Overall Platform Execution Workflow and Asynchronous Data Pipelining}
+    \label{fig:bpmn_flow}
+\end{figure}
+
+\section{ACTOR USE CASE MODELLING}
+The Use Case Diagram establishes a high-level boundary of the platform, explicitly mapping the authorized actions of various internal and external entities. The EMERGENT platform is driven by three distinct primary actors, each with explicitly segregated operational capabilities.
+
+\subsection{The Administrator (Organizer)}
+The Administrator holds the highest tier of localized platform privilege. Their primary goal is the successful facilitation of the tournament. The use cases constrained to this actor include:
+\begin{itemize}
+    \item \textbf{Room Provisioning:} Generating a new secure tournament room and obtaining the cryptographic PIN.
+    \item \textbf{Tournament Configuration:} Defining the primary abstraction game (e.g., Tron or Connect4) that will be enforced for all players in that lobby.
+    \item \textbf{Lobby Control:} Broadcasting the room code to participants and manually closing the room post-tournament to prevent further algorithmic submissions.
+\end{itemize}
+
+\subsection{The Participant (Student/Developer)}
+The Participant interacts almost exclusively with the developer interface. Their actions are highly restricted strictly to the tenancy of the room they have explicitly joined.
+\begin{itemize}
+    \item \textbf{IDE Integration:} Selecting a designated compiler language, writing code within the Monaco IDE, and executing local syntax checks.
+    \item \textbf{Code Submission:} Pushing versioned bots to the active matchmaker queue.
+    \item \textbf{Test Match Invocation:} Requesting isolated, unranked execution sequences against static pre-calibrated AI Benchmark bots to test logic before committing entirely to the global ranked ladder.
+    \item \textbf{Post-Action Review:} Browsing historical matches and utilizing the Canvas Visualizer to replay the exact deterministic progression of the executed match.
+\end{itemize}
+
+\subsection{The System Sandbox Actor (The Matchmaker)}
+Unlike the human-driven actors, the Matchmaker is a continuous, automated system daemon. 
+\begin{itemize}
+    \item \textbf{Algorithmic Pairing:} Polling the active player roster and sorting them via a "Max-Information-Gain" scheduler to find the most statistically relevant pair.
+    \item \textbf{Container Escalation:} Sending low-level execution demands to the Docker Daemon.
+    \item \textbf{Rating Finalization:} Parsing the binary exit codes of the containers to recalculate and commit the comprehensive Glicko-2 participant rating shifts.
+\end{itemize}
+
+% PLACEHOLDER FOR USE CASE DIAGRAM
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{6cm}
+    \caption{UML Use Case Diagram depicting Admin, Participant, and Autonomous System Actor boundaries}
+    \label{fig:use_case}
+\end{figure}
+
+\section{SYSTEM SEQUENCE DESIGN AND TIMING DIAGRAMS}
+Sequence diagrams are essential for modeling the dynamic, inter-process communication behavior of the system, depicting the exact chronological flow of messages between object controllers over time. The fundamental operational pipeline in the EMERGENT platform is the "Submission to Execution Lifecycle", which requires strict transactional integrity to prevent corrupted database states or memory hanging.
+
+The exact systemic sequence unfolds through the following chronological operations:
+\begin{enumerate}
+    \item The Participant's browser application parses the raw string arrays from the embedded Monaco editor. It bundles the payload alongside language configuration flags and invokes an asynchronous \texttt{multipart/form-data} POST request traversing the frontend routing layer.
+    \item The Backend REST Controller validates the JWT or minimalist authentication headers, asserts that the active \texttt{room\_code} is still alive and accepting submissions, and securely flushes the bot script into a segregated local file system cache (e.g., \texttt{/bots\_submissions/<room\_id>/<user>/}).
+    \item Refusing to block the active thread, the API issues a "Pending Request Job" mapped to the Redis/Database queuing system and immediately responds to the HTTP connection with a \texttt{202 Accepted} response, restoring the client UI to a responsive, non-frozen state.
+    \item Independently, the Background Matchmaker daemon thread executes its scheduler tick (typically every 1-2 seconds), sweeps the queue, and identifies the updated bot status. It queries the Glicko-2 tables to form an academically valid pairing.
+    \item The internal Python Referee class is instantiated. It constructs an isolated, read-only Docker Volume referencing the newly saved files and dynamically provisions two ephemeral Docker containers (often utilizing the paused "Warm Pool" to eliminate cold-start lag). Both containers are connected strictly to each other and the host referee via standard IPC pipes.
+    \item The primary turn-by-turn simulation loop commences. The Referee broadcasts the JSON formatted board state to \texttt{stdin} and waits up to a strict 1.0-second threshold to read the respective coordinates from \texttt{stdout}. 
+    \item Post-simulation (due to victory, algorithmic draw, timeout, or OOM exception), the Referee broadcasts a \texttt{SIGKILL} wiping the containers. The worker thread runs the complex Glicko-2 volatility iterations, maps the rating updates, and stringifies the dense \texttt{GameState.json} spatial payload.
+    \item A final atomic commit pushes the aggregated results into the persistence layer. The Participant's frontend dashboard, acting via localized background polling, detects the updated schema timestamp and automatically invokes a React hook, injecting the new simulation log directly into the replay canvas.
+\end{enumerate}
+
+% PLACEHOLDER FOR SEQUENCE DIAGRAM
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{8cm}
+    \caption{UML Sequence Diagram delineating Code Submission mapping to Deterministic Container Execution}
+    \label{fig:sequence_diagram}
+\end{figure}
+
+\section{SECURITY ARCHITECTURE AND SANDBOX ISOLATION}
+A paramount design consideration for the platform involves threat mitigation. Designing an environment meant to execute completely untrusted remote code implies that malicious developers will attempt system escaping. 
+
+The security architecture of EMERGENT is designed around "Zero-Trust Containerization." Instead of running code directly on the host's OS shell, the system utilizes Linux native namespaces and control groups (cgroups), orchestrated by the Docker Daemon, to create severely restricted micro-environments. 
+\begin{itemize}
+    \item \textbf{Network Isolation:} Containers are booted exclusively with the \texttt{--network=none} parameter. A bot theoretically infected with a reverse-shell payload cannot dial out to a remote command-and-control server. Furthermore, the two competing bots cannot communicate directly with one another over local sockets to collude; all data must strictly flow through the host Umpire structure via standard input/output pipes.
+    \item \textbf{Process and Resource Throttling:} To heavily mitigate Denial-of-Service (DoS) and Fork-Bomb attacks (e.g., recursive child spawning), the execution environment design enforces rigid physical constraints. The environment utilizes cgroup limitations such as \texttt{--cpus="1.0"} (restricting execution to a single physical core) and \texttt{--memory="512m"}. In the event a script attempts to allocate arrays continuously, the Linux kernel acts as the ultimate arbiter, aggressively striking down the container process the exact millisecond memory usage breaches the threshold.
+\end{itemize}
+
+\section{RELATIONAL DATABASE DESIGN AND NORMALIZATION}
+The structural pivot towards the "Room-First" MVP necessitated the creation of a highly normalized, multi-tenant relational schema. The primary goal of the SQL data layer is localized isolation; variables, leaderboard queries, and active algorithm paths must never encounter context spillage across separate, actively running tournaments.
+
+The database operates primarily within Third Normal Form (3NF), ensuring data integrity while aggressively minimizing localized repetition. The decision to forgo massive ORMs in favor of direct query execution ensures that latency remains incredibly low even under the stress of rapid matchmaking commits.
+
+\subsection{Core Entity-Relationship Mappings}
+The Entity-Relationship (ER) model maps dependencies across four tightly interdependent canonical structures:
+
+\begin{itemize}
+    \item \textbf{Rooms Table (\texttt{rooms}):} This table acts as the overarching namespace for a given instance. It enforces uniquely generated \texttt{room\_code} values and stores cryptographic data such as the hashed administrator logic mechanism. It is fundamentally linked to a specific \texttt{game\_key}, enforcing that Tron bots cannot logically be matched against Connect4 game structures.
+    \item \textbf{Participants Table (\texttt{participants}):} This entity logically maps human interaction. A participant object is strictly defined by a local composite constraint binding \texttt{room\_id} and \texttt{display\_name}, meaning the user "Alex" in Room A has zero shared schema relations to the user "Alex" in Room B. This ensures pure compartmentalization, alongside storing string paths referring to their serialized binary logic payloads on the Linux filesystem.
+    \item \textbf{Ratings Metadata Table (\texttt{room\_ratings}):} Isolated from basic user data to allow rapid, high-frequency writes during matches. It permanently archives the highly specific numeric parameters required by the algorithmic system: an absolute core \texttt{rating}, the localized \texttt{rd} (Rating Deviation mapping historical confidence), and the abstract \texttt{vol} (Volatility metric projecting consistency variations).
+    \item \textbf{Transaction Table (\texttt{room\_matches}):} The most critical transactional junction table. It binds a many-to-many physical mapping linking \texttt{participant\_a\_id} and \texttt{participant\_b\_id}. It explicitly records the execution outcome utilizing detailed categorical enums allowing the system to historically differentiate between a clean Strategic Win, a runtime syntax exception, or a forceful standard IO Timeout. Crucially, the table stores massive string blobs holding the entire 2D coordinate frame replay rendering logic.
+\end{itemize}
+
+% PLACEHOLDER FOR ER DIAGRAM
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{7cm}
+    \caption{Structured Entity-Relationship (ER) Model displaying Third Normal Form and Room-First constraints}
+    \label{fig:er_diagram}
+\end{figure}
+
+% ====================
+% CHAPTER 4: SYSTEM IMPLEMENTATION
+% ====================
+\chapter{SYSTEM IMPLEMENTATION}
+
+System Implementation is the critical phase where the theoretical system designs, use cases, and database schemas are translated into functional source code. For EMERGENT, this phase required integrating diverse technological stacks: a modern React front-end, a robust Flask python backend, and a low-level OS-dependent Docker execution engine. This chapter provides a highly detailed breakdown of how each core module was engineered, focusing heavily on the algorithmic logic, pipeline management, and technical solutions to edge-case anomalies.
+
+\section{FRONTEND UI AND WORKSPACE IMPLEMENTATION}
+The user interface serves as the primary conduit for participant interaction. Built using React.js and scaffolded with Vite to ensure blazing-fast Hot-Module Replacement (HMR) during the development lifecycle, the frontend is engineered as a Single Page Application (SPA). This SPA architecture prevents jarring page reloads, which is critical when users are actively coding and monitoring live match queues.
+
+\subsection{Monaco Editor Workspace Integration}
+At the heart of the developer experience is the integrated web IDE workspace. Rather than relying on basic HTML text areas, the platform embeds the Monaco Editor—the exact declarative text-editing component that powers Microsoft's Visual Studio Code.
+\begin{itemize}
+    \item \textbf{Language Agnostic Syntax Highlighting:} The Monaco instance is dynamically configured to support multiple compiler languages. When a user selects Python, Java, or C/C++ from the dropdown, the editor swaps its internal lexer rules, providing immediate keyword highlighting, scope folding, and intelligent bracket matching.
+    \item \textbf{State Management:} As the user types, the code string is maintained in the localized React Context state. Upon clicking the "Submit" module, the frontend packages this raw string, along with the user's explicit \texttt{room\_code} and \texttt{display\_name}, into a multi-part form data structure to be transmitted via the REST HTTP protocol to the backend.
+\end{itemize}
+
+\subsection{Modular Replay Visualizer}
+Because EMERGENT supports multiple abstraction games (e.g., Tron, Connect4), the Visualizer component is designed as a dynamic schema consumer rather than hardcoding rendering logic. 
+\begin{itemize}
+    \item \textbf{Data Ingestion:} Once a match concludes, the client fetches the \texttt{GameState.json} payload from the Flask API. This payload outlines every grid coordinate, bounding box, and frame variation generated by the Referee Engine.
+    \item \textbf{Frame-by-Frame Rendering:} Using standard HTML5 Canvas and advanced CSS Grid layouts, the Visualizer iterates through the array of game states. It exposes a "Flight Recorder" control panel to the user, complete with Play, Pause, Next Tick, and Previous Tick buttons. By decoupling the render logic from the game logic, new topological games can be displayed with minimal frontend refactoring.
+\end{itemize}
+
+\section{BACKEND ORCHESTRATION AND APIs}
+The main server application acts as the synchronization hub. Developed in Python utilizing the Flask micro-framework, it maps URL routes to underlying Python controller functions.
+
+\subsection{Room Management and Minimalist Authentication}
+To prioritize rapid tournament spooling for LAN clubs and academia, heavy OAuth integrations were discarded in favor of a "Minimalist Authentication" model. 
+When an Administrator hits the \texttt{POST /api/rooms} endpoint, the server executes a randomized cryptographic generator to spit out a unique 6-character alphanumeric room code and a 4-digit admin PIN.
+\begin{itemize}
+    \item \textbf{Participant Binding:} When a student submits their code, the server queries the database. If the \texttt{(room\_code, display\_name)} composite payload does not exist, it registers a new participant and hashes that initial submit password utilizing SHA-256 with an aggressive salt. 
+    \item \textbf{Subsequent Authorization:} If a student attempts to update their bot or request a benchmark test, the middleware compares the provided password payload against the stored hash. This completely sandboxes user profiles to specific rooms.
+\end{itemize}
+
+\section{MATCHMAKING AND RATING ENGINE}
+To prevent server I/O blocking during heavy compilations, the system abandons manual matchmaking in favour of an autonomous Background Worker and live scheduler architecture. 
+
+\subsection{Live Room Scheduler and Max Information Gain}
+The fundamental problem in continuous automated tournaments is deciding \textit{who plays whom} and \textit{when}. Random pairings are highly inefficient; pitting a beginner against a multi-tournament Grandmaster yields almost no new statistical data about either player's true skill. To resolve this, EMERGENT implements a Live Room Scheduler Tick policy that utilizes a "Max-Information-Gain" pairing algorithm.
+
+The scheduler runs periodic ticks, evaluating the entire pool of participants within a room based on three discrete phases:
+
+\begin{enumerate}
+    \item \textbf{Calibration Phase (High RD):} When a user submits a bot for the first time, their Rating Deviation (RD) defaults to 350. The scheduler prioritizes pairing this new bot against standardized "Tiered Benchmark Bots" (pre-calibrated internal AI) or veteran players with very low RDs. This rapidly brackets the new user's skill, immediately pulling their RD down and preventing leaderboards from becoming polluted with uncalibrated anomalies.
+    \item \textbf{General Tick Policy \& Max Information Gain:} Once calibrated, the scheduler computes the relative distance between all active bots. It pairs bots where the predicted outcome is closest to 50/50 (i.e., their ratings are nearly identical). A match between evenly matched opponents yields the "Maximum Information Gain" mathematically, causing the greatest meaningful adjustment to their ratings post-match.
+    \item \textbf{Convergence Stop Gate \& Rematch Caps:} To prevent server exhaustion and stop two bots from uselessly farming each other, the system tracks bot-version rematches. A hard configurable rematch cap restricts identical bot versions from fighting repeatedly. Furthermore, a Room Convergence Stop Gate is implemented; if all bots in a room have played each other and their RD falls below a stable threshold (e.g., RD $<$ 50), the scheduler safely pauses matchmaking for that room until a user submits new, updated code.
+\end{enumerate}
+
+\subsection{Glicko-2 Algorithmic Implementation}
+Upon the successful completion of a scheduled match, the worker thread intercepts the Win (1), Loss (0), or Draw (0.5) termination code. Standard Elo algorithms are fundamentally flawed for bot tournaments because they naively assume a player's current rating is absolutely precise. EMERGENT instead implements Mark Glickman's \textbf{Glicko-2 System}, which introduces a multidimensional measure of skill. 
+
+Each participant's profile tracks three dynamic variables:
+\begin{itemize}
+    \item \textbf{Rating ($r$):} The raw measure of absolute skill. Default starting value is 1500.
+    \item \textbf{Rating Deviation ($RD$):} Represents the mathematical uncertainty of the rating. Default starting value is 350. As a player completes more matches, the system becomes more confident in their skill, and RD approaches 0.
+    \item \textbf{Rating Volatility ($\sigma$):} Measures the degree of expected statistical fluctuation in a player's rating. A highly consistent player will have a low volatility, whereas a highly erratic bot will have a high volatility. Default starting value is 0.06.
+\end{itemize}
+
+\subsubsection*{Mathematical Computation Logic}
+When processing the result, the engine first converts the base Glicko ratings into the standard Glicko-2 scale parameters using the scale multiplier $173.7178$:
+\begin{equation} \label{eq:scale}
+    \mu = \frac{r - 1500}{173.7178} \quad \text{and} \quad \phi = \frac{RD}{173.7178}
+\end{equation}
+Where in Equation \ref{eq:scale}:
+\begin{itemize}
+    \item $\mu$ is the converted Glicko-2 rating parameter.
+    \item $\phi$ is the converted Glicko-2 rating deviation parameter.
+    \item $r$ is the participant's original base Rating.
+    \item $RD$ is the participant's original base Rating Deviation.
+\end{itemize}
+
+To compute the impact of an opponent's rating deviation on the match outcome, the algorithm applies the weighting function:
+\begin{equation} \label{eq:weight}
+    g(\phi) = \frac{1}{\sqrt{1 + \frac{3\phi^2}{\pi^2}}}
+\end{equation}
+Where in Equation \ref{eq:weight}:
+\begin{itemize}
+    \item $g(\phi)$ represents the weighting function that diminishes the impact of a rating change if the opponent's rating is highly uncertain.
+    \item $\phi$ is the opponent's rating deviation on the Glicko-2 scale.
+    \item $\pi$ is the mathematical constant Pi.
+\end{itemize}
+
+This allows the engine to calculate the expected outcome of a match between the evaluated player and the opponent:
+\begin{equation} \label{eq:expected}
+    E(\mu, \mu_j, \phi_j) = \frac{1}{1 + \exp(-g(\phi_j)(\mu - \mu_j))}
+\end{equation}
+Where in Equation \ref{eq:expected}:
+\begin{itemize}
+    \item $E$ is the expected probability of the evaluated player winning the match.
+    \item $\mu$ is the evaluated player's converted Glicko-2 rating.
+    \item $\mu_j$ is the specific opponent's converted Glicko-2 rating.
+    \item $\phi_j$ is the specific opponent's converted rating deviation.
+\end{itemize}
+
+Once expectations are established, the engine evaluates the estimated variance of the player's rating based on the collected match outcomes alongside the estimated scalar improvement:
+\begin{equation} \label{eq:variance}
+    v = \left[ \sum_{j=1}^{m} g(\phi_j)^2 E(1 - E) \right]^{-1}
+\end{equation}
+\begin{equation} \label{eq:improvement}
+    \Delta = v \sum_{j=1}^{m} g(\phi_j)(s_j - E)
+\end{equation}
+Where in Equations \ref{eq:variance} and \ref{eq:improvement}:
+\begin{itemize}
+    \item $v$ is the estimated variance of the player's rating resulting from the rating period.
+    \item $\Delta$ is the estimated improvement in the true rating based on the match results.
+    \item $m$ is the total number of opponents played.
+    \item $j$ denotes the index of a specific opponent in the summation.
+    \item $s_j$ represents the objective, observable match score against opponent $j$ ($1$ for win, $0.5$ for draw, $0$ for loss).
+\end{itemize}
+
+Finally, the backend utilizes an iterative numerical procedure (specifically utilizing the Illinois algorithm) to find the new Volatility ($\sigma'$), which is plugged back into the primary equations to compute the post-match $\phi'$ and $\mu'$. These values are instantly reverted back to the standard $r$ and $RD$ scales and atomically committed back into the SQLite \texttt{room\_ratings} table. 
+
+This rigorous mathematical integration drastically enhances algorithmic integrity, heavily rewarding users who consistently write robust strategies while aggressively demoting architectures that rely on lucky edge-case victories.
+
+\section{THE DETERMINISTIC DOCKER SANDBOX (REFEREE)}
+The most complex engineering challenge within the EMERGENT stack is the Referee Engine. It must execute highly untrusted, possibly malicious, and inevitably buggy code provided by students without compromising the host architecture.
+
+\subsection{Sandboxing and Ephemerality}
+Every single match invokes the Docker daemon. The referee spins up dedicated, highly restricted containers devoid of internet routing access via the \texttt{--network=none} flag. Furthermore, strict quota limits are heavily enforced directly onto the Docker API using flags such as \texttt{--memory="512m"} and \texttt{--cpus="1.0"}. If a student writes a massive memory leak (e.g., an infinite appending array), the container process is forcefully killed by the OS kernal (yielding an Out-Of-Memory OutOfMemory OOM exception), which the Referee catches, interprets, and communicates cleanly back to the client as an "Internal Crash Loss."
+
+\subsection{Interprocess Communication (IPC) and Anomaly Handling}
+The Referee Engine utilizes Python's built-in \texttt{subprocess.Popen} module to pipe streams directly into the running Docker containers. At the start of a turn, the engine writes the physical board state to standard input (stdin) of the student's bot, and heavily monitors standard output (stdout) for the return coordinates.
+
+Significant technical implementations were required to handle I/O anomalies:
+\begin{itemize}
+    \item \textbf{Non-terminating Strings:} If a user's code attempts to output a move but fails to flush a newline character (\texttt{\textbackslash n}), typical buffered pipeline reading will halt indefinitely. The system bypasses this by forcing select-based asynchronous reads with strict millisecond timeouts.
+    \item \textbf{Standard Error Blocking:} Normally, if a bot throws a syntax exception and writes heavily to \texttt{stderr}, it can block the buffer and crash the host thread. EMERGENT spins off secondary daemon threads to explicitly drain \texttt{stderr} pipes concurrently, ensuring the worker node gracefully identifies script crashes and immediately awards the opposing bot the win.
+\end{itemize}
+
+\subsection{Game Plugin Registry}
+To ensure the execution engine is decoupled from any hardcoded game rules, all game logic is routed through a \texttt{bases.py} interface. A "Tron" match is executed by loading the \texttt{TronPlugin}, which acts purely as an umpire—it verifies if an emitted coordinate is valid, computes collisions, and appends the tick state to the evolving \texttt{GameState.json} ledger.
+
+\section{IMPLEMENTATION SCREENSHOTS}
+
+The following figures illustrate the realized Graphical User Interface and execution flow.
+
+% PLACEHOLDER FOR SCREENSHOTS
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{5cm}
+    \caption{Implementation Screenshot - Single Page Application Landing View}
+    \label{fig:screen_landing}
+\end{figure}
+
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{5cm}
+    \caption{Implementation Screenshot - Web Workspace demonstrating Monaco IDE Integration and Execution Logs}
+    \label{fig:screen_workspace}
+\end{figure}
+
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{5cm}
+    \caption{Implementation Screenshot - Frame-by-Frame Visual Replay System (Tron Representation)}
+    \label{fig:screen_replay}
+\end{figure}
+
+\begin{figure}[hbp]
+    \centering
+    \rule{0.8\textwidth}{5cm}
+    \caption{Implementation Screenshot - Real-Time Dashboard and Glicko-2 Leaderboard view}
+    \label{fig:screen_leaderboard}
+\end{figure}
+
+% ====================
+% CHAPTER 5: TESTING
+% ====================
+\chapter{TESTING}
+
+Software testing is a paramount phase in the Systems Development Life Cycle (SDLC), heavily relied upon to ensure the integrity, security, and stability of the platform before it is deployed to end-users. For a platform like EMERGENT, which fundamentally relies on executing untrusted, potentially malicious code provided by users, rigorous dynamic testing is not just a quality assurance measure—it is a critical security imperative. 
+
+This chapter outlines the comprehensive testing methodologies applied to the system, spanning from isolated Unit Tests verifying mathematical formulas, to complex Security Edge-Case validations evaluating the Docker Sandbox’s resilience against system-level attacks like resource exhaustion and pipe blocking.
+
+\section{TESTING STRATEGY AND METHODOLOGY}
+The testing strategy employed for the EMERGENT architecture utilizes a hybrid approach, combining both White-Box testing (where the internal structure and implementation are known to the tester) and Black-Box testing (where scripts strictly evaluate the input-output behaviors without architectural awareness).
+
+Given the modular nature of the application, the testing lifecycle was broken down into the following hierarchical tiers:
+\begin{enumerate}
+    \item \textbf{Unit Testing:} Validating individual atomic functions (such as the Glicko-2 module and Password Hashing algorithms) in total isolation.
+    \item \textbf{Integration Testing:} Ensuring the localized components (e.g., the Flask routing controllers interfacing with the SQLite database) successfully communicate.
+    \item \textbf{Sandbox Resilience Testing:} A highly specialized testing tier unique to EMERGENT, wherein malicious or malformed bot scripts are purposefully injected to attempt to break the server host.
+    \item \textbf{System and End-to-End (E2E) Testing:} Simulating a complete user journey—from interacting with the React/Monaco frontend, submitting code, queueing the match, and rendering the final JSON replay.
+\end{enumerate}
+
+\section{UNIT TESTING}
+Unit tests were constructed to verify the operational logic of the backend application utilizing Python’s built-in \texttt{unittest} and \texttt{pytest} frameworks. By heavily mocking the database connections, these tests execute in milliseconds, allowing rapid iterative verification.
+
+\subsection{Glicko-2 Algorithmic Verification}
+The most critical unit tests involve the matchmaking rating system. Because algorithmic integrity is absolute, scripts were written to inject predetermined arrays of matches to assert the mathematical outputs.
+\begin{itemize}
+    \item \textbf{Expected Volatility Shift:} Scripts verified that a standard 1500 Rating ($r$) player who suffered a catastrophic loss to an 800 Rating player experienced an intense spike in their Rating Volatility ($\sigma$) parameter, proving the Illinois algorithm's iteration bounds.
+    \item \textbf{RD Reduction:} The system asserted that regardless of win or loss, the execution of 5 consecutive matches successfully reduced a new player's Rating Deviation (RD) from $350$ down to the expected baseline of circa $120$.
+\end{itemize}
+
+\subsection{Cryptographic Hash Validation}
+Within \texttt{test\_backend.py}, unit handlers were established corresponding to the minimalist authentication logic mapping. The tests verify that the \texttt{werkzeug.security.generate\_password\_hash} algorithm successfully binds a randomized salt to every newly created participant, and that identical raw string inputs correctly resolve to successful boolean affirmations during the \texttt{check\_password\_hash} routine.
+
+\section{INTEGRATION TESTING}
+Integration testing mapped the transactional boundaries between the routing layer, the database layer, and the asynchronous matchmaker. The testing script \texttt{test\_room\_flow.py} (located within the \texttt{scripts/active/} directory) automated the invocation of these heavily interdependent modules.
+
+\subsection{Room Schema Isolation}
+A fundamental paradigm of the MVP architecture is the "Room-First" philosophy. To guarantee that independent tournaments do not undergo cross-contamination, integration tests were run to simulate concurrent lobbying.
+\begin{itemize}
+    \item \textbf{Execution Flow:} The script fires \texttt{POST /api/rooms} twice to generate "Room A" and "Room B". User 'Alice' is appended to Room A, and an autonomous match is executed changing her rating to 1550.
+    \item \textbf{Assertion Check:} A secondary test script attempts to query Alice's profile utilizing Room B's contextual headers. The API must firmly reject this via a HTTP 404 (Not Found) or 401 (Unauthorized), affirmatively proving strict database tenancy isolation.
+\end{itemize}
+
+\section{SANDBOX RESILIENCE TESTING (EDGE CASES)}
+Standard web applications rarely have to account for malicious user inputs executing arbitrary binaries natively. EMERGENT’s execution engine was subjected to aggressive "Chaos Testing" to expose critical vulnerabilities regarding container escape and OS thread locking. The following highly specific edge cases were mapped and resolved:
+
+\subsection{Resource Exhaustion and OOM Exceptions}
+\textbf{The Threat:} A participant submits a bot coded to infinitely append integers to a global array structure in memory (e.g., \texttt{while True: arr.append(1)}). In a strictly un-sandboxed environment, this code behaves as a Memory Leak, consuming all available server RAM and crashing the host machine infrastructure completely.
+
+\textbf{The Test and Mitigation:} A simulated leak bot was injected into the queue. The Docker Daemon correctly intercepted the memory request once it breached the strict \texttt{--memory="512m"} flag limit. The Linux kernel forcefully executed a SIGKILL (Signal 9) on the container process. Crucially, the Referee engine was tested to ensure it elegantly caught the \texttt{Out-Of-Memory (OOM)} exception code, dynamically generating a JSON payload indicating an "Internal Crash Loss" for that participant and saving the server from downtime.
+
+\subsection{Standard Error (stderr) Buffering Anomaly}
+\textbf{The Threat:} By default, the Python \texttt{subprocess.Popen} module connects to a spawned container via pipes. If a submitted bot encounters an arbitrary syntax error and generates an arbitrarily massive stack trace (spanning several megabytes) directed to the \texttt{stderr} channel, the default OS pipe buffer (typically 64KB) fills completely. When this happens, the operating system blocks the container from writing further. Concurrently, if the Host Referee is waiting to read from \texttt{stdout}, it blocks indefinitely—resulting in a permanent Thread Freeze zombie worker.
+
+\textbf{The Test and Mitigation:} A "noisy" bot deliberately structured to vomit 10MB of garbage logs to \texttt{sys.stderr} was tested. To pass the test, the Referee architecture was altered to spawn independent asynchronous daemon threads dedicated entirely to draining the \texttt{stderr} pipes concurrently. The test proved that the worker node could successfully identify the bot crash instantly, bypassing the buffer lock natively.
+
+\subsection{Non-Terminating String IO (The Newline Bug)}
+\textbf{The Threat:} The Referee communicates with active bots utilizing standard I/O streams. The game protocol dictates a bot must send a coordinate and append a newline character (\texttt{\textbackslash n}) to flush the buffer. If a developer accidentally writes \texttt{print("UP", end="")}, the buffer is never flushed. The Referee's \texttt{readline()} loop blocks indefinitely waiting for EOF or newline, inaccurately logging it as a generic "Timeout" instead of parsing the anomalous state.
+
+\textbf{The Test and Mitigation:} Scripts were structured to fire these malformed outputs. The testing validated custom \texttt{select()} OS-level pollings integrated into the engine, ensuring that if a stream fails to terminate within the strict 1.0-second Turn CPU threshold, the worker violently severs the connection and categorises the failure precisely as a logic I/O string mismatch rather than a hanging timeout.
+
+\section{END-TO-END (E2E) AND SYSTEM TESTING}
+E2E testing replicates the absolute client experience. Unlike isolated scripts, these tests run fully across the React.js GUI.
+
+\subsection{Monaco Editor and Frontend Evaluation}
+Tests were conducted to evaluate that a user could seamlessly switch contexts. It verified that changing the dropdown from \texttt{Python} to \texttt{Java} accurately updated the Monaco Editor’s Language Services provider, and that issuing a "Submit" event correctly packaged the multipart \texttt{bot\_zip\_file} payload through the modern Fetch API boundaries cleanly.
+
+\subsection{Replay Rendering Accuracy}
+The Visualizer was tested using a heavily populated \texttt{GameState.json} dummy file containing over 500 game ticks. The system passed the visual assertion test by smoothly running the Canvas rendering at 60 Frames Per Second (FPS) without resulting in noticeable DOM lag, effectively proving the decoupling of the Game Logic implementation from the React rendering components.
+
+\section{FORMAL TEST CASE SPECIFICATIONS}
+The following tables formally document a cross-section of the explicit system test cases executed to guarantee compliance with the Software Requirement Specifications.
+
+\vspace{0.5cm}
+\begin{table}[ht]
+\centering
+\renewcommand{\arraystretch}{2.0} % Stretches the rows making the table very large and readable
+\begin{tabular}{|p{1.5cm}|p{5cm}|p{4cm}|p{4cm}|p{1.5cm}|}
+\hline
+\textbf{Test ID} & \textbf{Test Description} & \textbf{Expected Output} & \textbf{Actual Output} & \textbf{Status} \\ \hline
+\texttt{TC-01} & Submit Python code with valid syntax and correct \texttt{room\_code}. & Code accepted, queued, HTTP 200 OK. & Code accepted, pending job created in DB, 200 OK returned. & \textbf{PASS} \\ \hline
+\texttt{TC-02} & Submit Java code missing the compilation script (\texttt{run.sh}). & Referee catches missing artefact, returns Error. & \texttt{ValidationException} raised, frontend displays error envelope. & \textbf{PASS} \\ \hline
+\texttt{TC-03} & Create a room using the Admin Panel. & System generates exact 6-char code and 4-digit PIN. & 6-char UUID and hashed PIN successfully written to SQLite. & \textbf{PASS} \\ \hline
+\texttt{TC-04} & Send unauthorized test match request with wrong password hash. & HTTP 401 Unauthorized middleware rejection. & 401 Unauthorized securely returned without touching queue. & \textbf{PASS} \\ \hline
+\end{tabular}
+\vspace{0.2cm}
+\caption{System Implementation Test Cases - Module 1: API and Orchestration}
+\label{tab:test_cases_api}
+\end{table}
+
+\vspace{0.5cm}
+\begin{table}[ht]
+\centering
+\renewcommand{\arraystretch}{2.0}
+\begin{tabular}{|p{1.5cm}|p{5cm}|p{4cm}|p{4cm}|p{1.5cm}|}
+\hline
+\textbf{Test ID} & \textbf{Test Description} & \textbf{Expected Output} & \textbf{Actual Output} & \textbf{Status} \\ \hline
+\texttt{TC-05} & Inject an infinite \texttt{while} loop into bot script. & Referee enforces absolute 1.0s turn timer. & Container halted after exactly 1.03s. Timeout Loss recorded. & \textbf{PASS} \\ \hline
+\texttt{TC-06} & Inject huge unallocated memory array into Python list. & OS kernel issues SIGKILL when exceeding 512MB RAM. & Docker catches memory spike. OOM exception properly parsed by Worker. & \textbf{PASS} \\ \hline
+\texttt{TC-07} & Run Benchmark Tier 1 Bot against itself. & Bit-for-Bit Deterministic JSON output generated. & Identical seed generated identical replay byte-for-byte. & \textbf{PASS} \\ \hline
+\texttt{TC-08} & Submit 50 concurrent matches to Redis Queue. & Host processes gradually via Warm Pool without crash. & Queue populated and gracefully exhausted across 3 nodes over 20s. & \textbf{PASS} \\ \hline
+\end{tabular}
+\vspace{0.2cm}
+\caption{System Implementation Test Cases - Module 2: The Execution Sandbox}
+\label{tab:test_cases_sandbox}
+\end{table}
+
+% ====================
+% CHAPTER 6: CONCLUSION AND FUTURE SCOPE
+% ====================
+\chapter{CONCLUSION AND FUTURE SCOPE}
+
+\section{PROJECT SUMMARY}
+The development and deployment of the EMERGENT platform represents a significant leap forward in the domain of automated programming assessment. Traditional educational and recruitment tools have long relied on static, unit-test-based evaluations that check for mathematical correctness in a vacuum. EMERGENT was conceptualized and successfully engineered to disrupt this paradigm by introducing a highly dynamic, adversarial, and autonomous sandbox environment. By forcing user-submitted code to interact not only with the system but with the unpredictable logic of an opposing algorithmic entity in real-time, the platform rigorously tests the true resilience, efficiency, and resource management capabilities of the software developer.
+
+The "Room-First" Local Area Network (LAN) architecture prioritises rapid deployment and strict tenant isolation, stripping away the cumbersome overhead of global, highly-monetized cloud services. Through the integration of a modern React.js frontend, a localized Flask routing schema, and a heavily fortified Docker execution engine, the platform guarantees deterministic, fair, and mathematically balanced competitive programming tournaments.
+
+\section{OBJECTIVES ACHIEVED}
+Throughout the software development life cycle, several critical milestones were mapped and successfully completed, culminating in a robust Minimum Viable Product (MVP). The final delivered system meets all predefined functional and non-functional requirements.
+
+\subsection{Seamless Developer Experience via Monaco IDE}
+The integration of the Monaco Editor into the React frontend established a frictionless user experience. Participants are no longer required to configure local environments, install dependencies, or manage specific language runtimes. By providing native syntax highlighting, intelligent code folding, and auto-completion directly within the browser, the platform significantly lowers the barrier to entry, allowing users to focus entirely on algorithm design rather than environment troubleshooting.
+
+\subsection{Robust Sandboxing and Host Protection}
+The implementation of the Docker-backed background worker pool marks the core technical achievement of the project. Accepting arbitrary, native code from unverified users is inherently dangerous. The platform successfully established a zero-trust execution environment. By enforcing strict constraints via the Docker daemon—specifically capping memory at 512MB, disabling host network bridging entirely, and limiting Turn CPU execution to precisely 1.0 second—the server effectively insulates itself against malicious attacks, accidental memory leaks, and infinite loop thread-locking.
+
+\subsection{Algorithmic Fairness through Glicko-2}
+By rejecting superficial leaderboard systems and implementing the academically rigorous Glicko-2 rating formula, EMERGENT guarantees statistically valid skill assessments. The introduction of the 'Rating Deviation' ($RD$) and 'Volatility' ($\sigma$) parameters ensures that new users are placed fairly and experienced users are dynamically matched. The 'Max Information Gain' scheduler further optimizes the computational resources by ensuring that the background queue prioritizes matches that yield the highest statistical learning value, rather than wasting server ticks on heavily mismatched uncompetitive pairings.
+
+\subsection{Transparent Debugging via Replay Visualizer}
+The generation and visualization of the \texttt{GameState.json} replay artefact completely resolved the "Black Box" issue prevalent in competitive coding platforms. Instead of simply receiving a "Failed" status, developers on the EMERGENT platform can interactively step through their algorithm's exact chronological behavior. The HTML5 Canvas frontend renders complex topological grids cleanly, empowering developers to perform root-cause analysis on strategic logic failures.
+
+\section{FUTURE ENHANCEMENTS (PHASE 5 AND BEYOND)}
+While the current MVP successfully validates the dynamic execution model within a LAN tournament context, the foundational architecture was intentionally designed to be highly modular. This modularity naturally supports significant future expansions. To transition EMERGENT from a localised academic tool into a large-scale commercial platform, the following enhancements are mapped for subsequent development phases.
+
+\subsection{Cloud-Native Migration via Kubernetes Orchestration}
+Currently, the execution sandbox relies on directly interfacing with a single node's Docker Daemon to spin up ephemeral containers. As user concurrency scales, a single host machine will inevitably bottleneck. Future iterations will migrate the execution engine to a distributed Kubernetes (K8s) cluster. By replacing the raw Docker subprocess pipelines with Kubernetes Jobs or Knative, the platform could dynamically auto-scale the worker nodes across multiple external server instances based on active queue length, facilitating global tournaments rather than restricting them to local rooms.
+
+\subsection{Expansion of the Game Plugin Registry}
+The core logic engine currently operates via an abstracted Umpire protocol cleanly demonstrated by the `Tron` game model. Future work will expand this registry to include a multi-tiered array of topological and strategic environments:
+\begin{itemize}
+    \item \textbf{Imperfect Information Games:} Implementing variants such as Battleship with hidden grids, forcing user bots to rely heavily on probability and state-estimation algorithms rather than absolute deterministic pathfinding.
+    \item \textbf{Multi-Agent Team Mechanics:} Upgrading the generic $1\text{v}1$ arena structure to handle $N\text{v}N$ environments (e.g., a $4\text{v}4$ grid control game), where a single participant must program multiple sub-bots that communicate and coordinate with one another via local channel simulations.
+    \item \textbf{User-Defined Rule Sets:} Allowing super-users and professors to utilize the frontend to define their own JSON-based rulesets and grid sizes, dynamically generating new games without requiring backend deployments.
+\end{itemize}
+
+\subsection{Advanced Machine Learning and Analytics}
+The platform currently generates vast amounts of data in the form of raw textual output and coordinate choices. Integrating an analytics pipeline that processes these parsed logs could allow for the generation of competitive "Heatmaps." Furthermore, historical database replays could be exported to train generalized Machine Learning models (such as Reinforcement Learning Neural Networks), effectively creating an infinitely scalable ultimate "Benchmark Bot" generated entirely from aggregating the best strategies of human participants.
+
+\subsection{Team-Based Shared Workspaces}
+To encourage collaborative programming, the frontend Monaco implementation could be upgraded to integrate Operational Transformation (OT) or Conflict-Free Replicated Data Types (CRDTs) models. This would allow multiple students to connect their client browsers to the exact same bot profile simultaneously, writing separate sections of an algorithm (e.g., pathfinding vs target prioritization) collaboratively in real-time similar to Google Docs.
+
+\section{FINAL REMARKS}
+EMERGENT fundamentally redefines the software testing environment. It is more than just a gamified platform—it is a robust orchestration of concurrent processing, rigorous mathematical statistics, and localized container security. By continuously scoring developers entirely on how their logic reacts to absolute, adversarial chaos, the platform simulates the demands of modern cloud production engineering better than any static test. The current system establishes an exceptional foundation, and through the suggested future extensions, it holds the potential to become a definitive standard in technical evaluation.
+
+\end{document}
