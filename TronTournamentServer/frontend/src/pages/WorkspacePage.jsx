@@ -4,6 +4,7 @@ import Editor from "@monaco-editor/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Code2,
+  Crown,
   Terminal,
   PlaySquare,
   Activity,
@@ -390,7 +391,7 @@ ${gameSpecs.bot_io?.output || ""}
         {/* Right Pane Tab Navigation */}
         <div className="flex items-center gap-1 px-2 pt-2 border-b border-slate-800 bg-slate-900">
           {[
-            { id: 'specs', label: 'Registry Specs', icon: ScrollText },
+            { id: 'specs', label: 'Description', icon: ScrollText },
             { id: 'raw', label: 'I/O Inspector', icon: Activity },
             { id: 'logs', label: 'Console Logs', icon: Code2 },
             { id: 'replay', label: 'Visualizer', icon: PlaySquare },
@@ -504,66 +505,84 @@ ${gameSpecs.bot_io?.output || ""}
               <motion.div key="arena" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
                 
                 {/* Match Control */}
-                <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl"></div>
-                  <h3 className="text-lg font-bold text-slate-200 mb-2 relative z-10 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-400"/> Arena Commands</h3>
-                  <p className="text-sm text-slate-400 mb-6 relative z-10">Queue your bot to play a rated match against an opponent on the server.</p>
-                  <div className="flex gap-4 relative z-10">
-                    <button onClick={onQueue} disabled={isTesting || isSubmitting} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-md font-medium transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2">
-                      <PlaySquare className="w-4 h-4" /> Submit
-                    </button>
-                    <button onClick={refresh} disabled={isTesting || isSubmitting} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2.5 rounded-md font-medium transition-colors flex items-center gap-2 border border-slate-700">
-                      <RefreshCw className="w-4 h-4" /> Refresh Leaderboard
-                    </button>
+                <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-200 relative z-10 flex items-center gap-2">
+                       <Trophy className="w-5 h-5 text-yellow-400"/>
+                       Live Room Standings
+                    </h3>
                   </div>
+                  <button onClick={refresh} disabled={isTesting || isSubmitting} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-5 py-2 rounded-md font-medium transition-colors flex items-center gap-2 border border-slate-700 relative z-10 h-max">
+                    <RefreshCw className="w-4 h-4" /> Refresh Leaderboard
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Leaderboard */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col max-h-96">
-                    <div className="bg-slate-950 px-4 py-3 border-b border-slate-800">
+                <div className="flex gap-6">
+                  {/* Leaderboard - 2/3 Width */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col max-h-[600px] flex-grow w-2/3">
+                    <div className="bg-slate-950 px-5 py-4 border-b border-slate-800">
                       <h3 className="font-bold text-slate-300 text-sm flex items-center gap-2">
                          Room ELO Rankings
                       </h3>
                     </div>
-                    <ul className="divide-y divide-slate-800/50 overflow-y-auto">
-                      {leaderboard.filter(r => r.matches_played > 0).length === 0 && (
+                    <ul className="divide-y divide-slate-800/50 overflow-y-auto p-4 space-y-2 pb-8">
+                      {(leaderboard || []).filter(r => r.matches_played > 0).length === 0 && (
                         <li className="p-4 text-sm text-slate-500 text-center">No ranked players yet</li>
                       )}
-                      {leaderboard.filter(row => row.matches_played > 0).map((row, idx) => (
-                        <li key={row.rank} className="p-3 flex justify-between items-center text-sm hover:bg-slate-800/30 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <span className="text-slate-600 font-mono w-4 font-bold">{idx + 1}.</span>
-                            <span className="text-slate-200 font-medium">{row.display_name}</span>
-                          </div>
-                          <span className="text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded text-xs">{row.rating}</span>
-                        </li>
-                      ))}
-                      {leaderboard.filter(r => r.matches_played === 0).length > 0 && (
-                        <li className="p-3 text-xs text-slate-500 text-center border-t border-slate-800/50 flex align-center justify-center italic">
-                          {leaderboard.filter(r => r.matches_played === 0).length} unranked players hidden
+                      {(leaderboard || []).filter(row => row.matches_played > 0).map((row, idx) => {
+                        const isTop3 = idx < 3;
+                        const rankStyles = [
+                          "bg-gradient-to-r from-amber-500/10 to-transparent border-l-4 border-amber-400 text-amber-500 hover:bg-amber-500/20",   // Gold
+                          "bg-gradient-to-r from-slate-300/10 to-transparent border-l-4 border-slate-300 text-slate-300 hover:bg-slate-300/20",   // Silver
+                          "bg-gradient-to-r from-orange-700/10 to-transparent border-l-4 border-orange-700 text-orange-500 hover:bg-orange-700/20"// Bronze
+                        ];
+                        
+                        const crownStyle = isTop3 ? rankStyles[idx] : "bg-slate-800/20 border-l-4 border-slate-600 text-slate-400 hover:bg-slate-800/50";
+                        const sizeStyle = idx === 0 ? "py-4 text-lg" : isTop3 ? "py-3 text-base" : "py-2.5 text-sm";
+                        
+                        return (
+                          <li key={row.rank} className={`px-4 rounded-r-lg transition-colors ${sizeStyle} ${crownStyle} flex justify-between items-center`}>
+                            <div className="flex items-center gap-4">
+                              <span className="w-8 flex justify-center font-bold font-mono">
+                                {idx < 3 ? <Crown className={`drop-shadow-sm ${idx === 0 ? 'w-6 h-6' : idx === 1 ? 'w-5 h-5' : 'w-4 h-4'}`} /> : `${idx + 1}.`}
+                              </span>
+                              <span className={`font-semibold tracking-wide ${idx === 0 ? 'text-xl drop-shadow-md text-slate-100' : 'text-slate-200'}`}>
+                                {row.display_name}
+                              </span>
+                            </div>
+                            <span className={`font-mono font-bold bg-black/20 px-3 py-1 rounded shadow-inner ${idx === 0 ? 'text-amber-400 text-lg' : idx === 1 ? 'text-slate-300 text-base' : idx === 2 ? 'text-orange-400 text-base' : 'text-emerald-400 text-sm'}`}>
+                               {row.rating}
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {(leaderboard || []).filter(r => r.matches_played === 0).length > 0 && (
+                        <li className="pt-4 pb-2 text-xs text-slate-500 text-center flex align-center justify-center italic">
+                          {(leaderboard || []).filter(r => r.matches_played === 0).length} unranked players hidden
                         </li>
                       )}
                     </ul>
                   </div>
 
-                  {/* Matches */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col max-h-96">
-                    <div className="bg-slate-950 px-4 py-3 border-b border-slate-800">
+                  {/* Matches - 1/3 Width */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col max-h-[600px] w-1/3">
+                    <div className="bg-slate-950 px-4 py-4 border-b border-slate-800">
                       <h3 className="font-bold text-slate-300 text-sm">Recent Matches</h3>
                     </div>
                     <ul className="divide-y divide-slate-800/50 overflow-y-auto">
-                      {matches.length === 0 && <li className="p-4 text-sm text-slate-500 text-center">No matches found</li>}
-                      {matches.map((m) => (
+                      {(matches || []).length === 0 && <li className="p-4 text-sm text-slate-500 text-center">No matches found</li>}
+                      {(matches || []).map((m) => (
                         <li key={m.id} className="p-0">
                           <button 
                             onClick={() => { loadMatchArtifacts(m.id); setTab("replay"); }}
-                            className="w-full text-left p-3 hover:bg-slate-800/50 transition-colors flex flex-col gap-1 group"
+                            className="w-full text-left p-4 hover:bg-slate-800/50 transition-colors flex flex-col gap-2 group"
                           >
-                            <span className="text-xs font-mono text-slate-500 group-hover:text-indigo-400 transition-colors">ID: {m.id}</span>
-                            <span className="text-sm text-slate-300">
-                              {m.participant_a_name} <span className="text-slate-600 px-1 text-xs">vs</span> {m.participant_b_name}
-                            </span>
+                            <span className="text-xs font-mono text-slate-500 group-hover:text-indigo-400 transition-colors">Match ID: {m.id}</span>
+                            <div className="text-sm font-medium text-slate-200 flex flex-col gap-1">
+                              <span className="text-emerald-400 truncate">{m.participant_a_name}</span>
+                              <span className="text-slate-500 text-xs italic">vs</span>
+                              <span className="text-rose-400 truncate">{m.participant_b_name}</span>
+                            </div>
                           </button>
                         </li>
                       ))}

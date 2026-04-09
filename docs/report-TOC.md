@@ -9,7 +9,8 @@ Assume all features, including Phase 5 stabilization, are fully completed.
 - [x] Chapter 3: System Design
 - [x] Chapter 4: System Implementation
 - [x] Chapter 5: Testing
-- [x] Chapter 6: Conclusion
+- [x] Chapter 6: Results and Discussion
+- [x] Chapter 7: Conclusion
 - [x] Acknowledgement, Synopsis, Abbreviations, Bibliography
 
 ---
